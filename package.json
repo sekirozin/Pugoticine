@@ -1,0 +1,25 @@
+{
+  "name": "pugoticine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "check": "tsc --noEmit",
+    "test": "tsx --test src/**/*.test.ts",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.10.0",
+    "hls.js": "^1.6.13"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20.17.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

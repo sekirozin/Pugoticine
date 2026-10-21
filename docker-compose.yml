@@ -1,0 +1,27 @@
+services:
+  pugoticine:
+    build: .
+    container_name: pugoticine
+    ports:
+      - "3012:3012"
+    environment:
+      PORT: "3012"
+      MEDIA_ROOT: "/media/movies"
+      DATA_DIR: "/app/data"
+      DB_FILE: "/app/data/pugoticine.db"
+      PUGOTILAB_PROFILE_URL: "http://pugotilab-auth:8080/auth/api/profile"
+      PUGOTILAB_LOGIN_URL: "https://pugotilab.com/auth"
+      RADARR_URL: "http://172.17.0.1:7878"
+      RADARR_API_KEY: "${RADARR_API_KEY:-}"
+      TZ: "America/Maceio"
+    volumes:
+      - /DATA/AppData/pugoticine/data:/app/data
+      - /DATA/Media/Movies:/media/movies:ro
+    networks:
+      - default
+      - pugotilab
+    restart: "no"
+
+networks:
+  pugotilab:
+    external: true
