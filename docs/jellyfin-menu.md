@@ -75,3 +75,46 @@ Prioridade: o que dá valor já com o app atual (filmes, progresso, login Pugoti
 O `public/ambient-effects.js` injetava `body>*:not(#pugotilab-ambient)…{position:relative}`. Por causa do `#id` dentro do `:not()`, essa regra vencia as classes e deixava `relative` a barra do topo, o menu, o **modal do player** e o aviso. O conteúdo descia uns 370 px e o player abria abaixo da página, não por cima.
 
 A correção usa `:where(...)`, que zera a especificidade. O PQA-231 verifica que `.topbar` e `#player-modal` voltaram a ser `fixed`.
+
+## Rodada 2 (03/11): Painel completo
+
+O Painel tem o mesmo menu do Jellyfin, com os mesmos grupos e itens, e uma tela por item:
+- **Fonte do menu:** `web/apps/dashboard/components/drawer/sections/*.tsx`.
+- **Campos e textos:** `strings/pt-br.json`.
+- **Valores padrão:** dos modelos do servidor (`ServerConfiguration.cs`, `EncodingOptions.cs`, `TrickplayOptions.cs`, `XbmcMetadataOptions.cs`, `BrandingOptions.cs`, `LiveTvOptions.cs`, `NetworkConfiguration.cs`).
+- **Grupos:** Servidor, Dispositivos, TV ao Vivo, Plugins e Avançado. O drawer do Jellyfin também tem "Tarefas Agendadas" em Avançado, e a tela foi incluída.
+
+O REA não foi necessário.
+
+**Onde fica cada parte:**
+- Esquema das telas: `src/painel/configuracao.ts`.
+- Banco: `src/painel/banco.ts` (arquivo `painel.db`, separado do de progresso e do das salas).
+- Rotas: `src/painel/rotas.ts`.
+- Telas: `public/painel.js`.
+
+Só administrador acessa. Usuário comum recebe 403 em todas as rotas `/api/painel*` e em `/api/configuracao/reproducao`.
+
+| Tela | Faz de verdade | Só salva (aviso na tela) |
+|---|---|---|
+| Painel | visão geral real (servidor, contagens, assistindo agora, atividade, biblioteca, tarefas, discos) | — |
+| Geral | Nome do servidor (título da página e Painel) | idioma, locais de cache e metadados, Quick Connect, limites de rendimento |
+| Marca | CSS personalizado aplicado no app | imagem de abertura, aviso no login (o login é do PugotiLab) |
+| Usuários | lista de quem já entrou (PugotiLab); **Desativar este usuário** bloqueia o acesso (403); excluir da lista | ocultar, limite de bitrate, sessões simultâneas, acesso às salas (SyncPlay) |
+| Bibliotecas › Bibliotecas | lista e **Rastrear Todas as Bibliotecas** | adicionar, renomear e remover (precisa do catálogo com várias bibliotecas) |
+| Bibliotecas › Exibir / Metadados / NFO | — | todos os campos |
+| Reprodução › Transcodificação | — (gravado e exposto em `GET /api/configuracao/reproducao`) | todos os campos; o braço do player liga |
+| Reprodução › Retomar | **Porcentagem máxima** decide quando o filme conta como assistido | mínimos e audiolivro |
+| Reprodução › Transmissão / Trickplay | — (Transmissão exposta para o player) | todos os campos |
+| Dispositivos | lista real (navegador, sistema, IP, último acesso), excluir um ou todos | — |
+| Atividade | registro real: entrou, começou a reproduzir, configuração alterada, tarefa, chave, backup, usuário; filtro Todos/Usuário/Sistema; retenção de 30 dias | — |
+| TV ao Vivo / DVR | — | campos do DVR; sintonizadores e guia aparecem desativados |
+| Plugins | — | lista de repositórios |
+| Redes | — | todos os campos (portas e HTTPS ficam com o Docker e o proxy do PugotiLab) |
+| Chaves da API | criar (o token aparece uma vez; só o hash é guardado), usar por `X-PugotiCine-Token` (acesso de admin), revogar | — |
+| Backups | criar (`.tar` com cópias consistentes de `pugoticine.db`, `painel.db` e `salas.db` + `manifest.json`), baixar, excluir | restaurar (responde 501 com aviso) |
+| Registros | arquivos `log_AAAAMMDD.log` reais do processo (7 dias) e leitura; aviso de **resposta lenta** aplicado | — |
+| Tarefas Agendadas | Varrer a biblioteca e Atualizar metadados do Radarr: última e próxima execução, duração, resultado, **Executar** | — |
+
+O PugotiCine também ganhou duas coisas novas:
+- `GET /api/marca`, que qualquer pessoa logada lê: nome do servidor e CSS.
+- O limite de "assistido" no `store.saveProgress`, que antes era fixo em 90% e agora vem de Retomar.
