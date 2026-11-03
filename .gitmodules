@@ -1,0 +1,6 @@
+[submodule "motor/servidor"]
+	path = motor/servidor
+	url = https://github.com/jellyfin/jellyfin.git
+[submodule "motor/web"]
+	path = motor/web
+	url = https://github.com/jellyfin/jellyfin-web.git

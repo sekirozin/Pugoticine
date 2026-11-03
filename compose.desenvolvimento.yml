@@ -1,0 +1,13 @@
+services:
+  pugoticine-desenvolvimento:
+    image: jellyfin/jellyfin:10.11.10
+    ports:
+      - "127.0.0.1:3013:8096"
+    volumes:
+      - pugoticine-config:/config
+      - pugoticine-cache:/cache
+      - ${PUGOTICINE_MIDIA:?Defina a pasta de mídia de teste}:/media:ro
+    restart: "no"
+volumes:
+  pugoticine-config:
+  pugoticine-cache:
