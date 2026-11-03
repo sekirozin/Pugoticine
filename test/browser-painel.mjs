@@ -41,7 +41,7 @@ try {
   // relative e o conteúdo descia ~370 px).
   assert.equal(await admin.evaluate(() => getComputedStyle(document.querySelector(".topbar")).position), "fixed");
   assert.equal(await admin.evaluate(() => getComputedStyle(document.querySelector("#player-modal")).position), "fixed");
-  assert.ok(await admin.evaluate(() => document.querySelector("[data-painel]").getBoundingClientRect().top) < 140, "Painel logo abaixo da barra do topo");
+  assert.ok(await admin.evaluate(() => document.querySelector(".painel-app").getBoundingClientRect().top) < 140, "Painel logo abaixo da barra do topo");
   const servidor = await admin.locator("[data-painel-servidor]").innerText();
   assert.match(servidor, /PugotiCine/);
   assert.match(servidor, /FFmpeg\s+\d/);

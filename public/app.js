@@ -1,4 +1,4 @@
-import { renderPainel } from "/painel.js";
+import { abrirPainel, fecharPainel } from "/painel.js";
 import { abrirOsd, definirDuracao, definirFonteDeInfo, fecharOsd } from "/player-osd.js";
 
 const state = {
@@ -102,29 +102,29 @@ function section(title, description, items) {
   </section>`;
 }
 
-// Painel do administrador (public/painel.js): carrega /api/painel e atualiza a cada 10 s enquanto aberto.
-async function renderPainelView() {
-  clearTimeout(renderPainelView.timer);
-  if (state.view !== "painel") return;
+// Painel do administrador (public/painel.js): menu do Painel do Jellyfin com uma tela por item.
+function renderPainelView() {
+  abrirPainel(content, {
+    api, escapeHtml, toast,
+    aoVarrer: (media) => { state.media = media; },
+    aoMudarMarca: aplicarMarca
+  });
+}
+
+// Painel › Geral (nome do servidor) e Marca (CSS personalizado) valem para todo o app.
+async function aplicarMarca() {
   try {
-    const painel = await api("/api/painel");
-    if (state.view !== "painel") return;
-    content.innerHTML = renderPainel(painel, escapeHtml);
-    content.querySelector("[data-painel-varrer]")?.addEventListener("click", async (event) => {
-      event.currentTarget.disabled = true;
-      event.currentTarget.textContent = "Escaneando...";
-      const result = await api("/api/catalog/scan", { method: "POST", body: "{}" }).catch((error) => { toast(error.message); return null; });
-      if (result) { state.media = result.media; toast(`Biblioteca atualizada: ${result.media.length} filme(s).`); }
-      renderPainelView();
-    });
-  } catch (error) {
-    content.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
-  }
-  renderPainelView.timer = setTimeout(renderPainelView, 10000);
+    const marca = await api("/api/marca");
+    document.title = marca.nomeServidor || "Pugoticine";
+    let estilo = document.querySelector("#css-personalizado");
+    if (!estilo) { estilo = document.createElement("style"); estilo.id = "css-personalizado"; document.head.append(estilo); }
+    estilo.textContent = marca.cssPersonalizado || "";
+  } catch { /* sem marca: mantém o padrão */ }
 }
 
 function render() {
   if (state.view === "painel") { renderPainelView(); return; }
+  fecharPainel();
   const items = visibleMedia();
   if (state.view === "home" && !state.query) {
     const recent = state.media.filter((item) => {
@@ -423,6 +423,7 @@ async function bootstrap() {
     if (data.profile.avatarUrl) $("#avatar").src = data.profile.avatarUrl;
     $("#scan-button").hidden = data.profile.role !== "admin";
     $("#painel-button").hidden = data.profile.role !== "admin";
+    aplicarMarca();
     render();
     window.dispatchEvent(new CustomEvent("pugoticine:pronto"));
     const requestedMedia = new URLSearchParams(location.search).get("play");
