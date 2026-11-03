@@ -11,6 +11,7 @@ import { MetadataCatalog } from "./metadata.js";
 import { createPlaybackPlan } from "./playback.js";
 import { ProbeService } from "./probe.js";
 import { Store } from "./store.js";
+import { disco, infoServidor, montarPainel } from "./painel/painel.js";
 import { Transcoder } from "./transcoder.js";
 import { GerenciadorHls } from "./reproducao/hls.js";
 import { CacheKeyframes } from "./reproducao/keyframes.js";
@@ -67,6 +68,17 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<voi
     scan();
     await metadata.refresh();
     json(res, 200, { media: publicMedia(), lastScanAt });
+    return;
+  }
+  // Painel do administrador (equivale à página inicial do Painel do Jellyfin).
+  if (url.pathname === "/api/painel" && req.method === "GET") {
+    if (profile.role !== "admin") { json(res, 403, { error: "Apenas administradores podem abrir o Painel." }); return; }
+    const versao = JSON.parse(fs.readFileSync(path.join(config.publicDir, "..", "package.json"), "utf8")).version as string;
+    json(res, 200, montarPainel({
+      catalogo: catalog.list(), ultimaVarredura: lastScanAt, intervaloVarreduraMs: config.scanIntervalMs, raizMidia: config.mediaRoot,
+      atividade: store.listActivity(50), agora: new Date(), servidor: infoServidor(versao, config.ffmpegPath),
+      discos: [disco(config.mediaRoot, "Mídia"), disco(config.dataDir, "Dados do PugotiCine")]
+    }));
     return;
   }
   if (url.pathname === "/api/progress" && req.method === "POST") {
