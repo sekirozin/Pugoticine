@@ -11,6 +11,22 @@ using Emby.Naming.Video;
 var opcoes = new NamingOptions();
 var episodios = new EpisodeResolver(opcoes);
 var json = new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+// "--opcoes": exporta os dados do NamingOptions (expressões, extensões, regras) para o PugotiCine usar os mesmos.
+if (args.Contains("--opcoes"))
+{
+    object Expr(EpisodeExpression e) => new { e.Expression, e.IsByDate, e.IsOptimistic, e.IsNamed, e.SupportsAbsoluteEpisodeNumbers, e.DateTimeFormats };
+    Console.WriteLine(JsonSerializer.Serialize(new
+    {
+        origem = "Emby.Naming NamingOptions, Jellyfin 10.11.10",
+        opcoes.VideoFileExtensions, opcoes.StubFileExtensions, opcoes.AudioFileExtensions, opcoes.SubtitleFileExtensions,
+        StubTypes = opcoes.StubTypes.Select(s => new { s.Token, s.StubType }),
+        opcoes.CleanDateTimes, opcoes.CleanStrings,
+        EpisodeExpressions = opcoes.EpisodeExpressions.Select(Expr),
+        MultipleEpisodeExpressions = opcoes.MultipleEpisodeExpressions.Select(Expr),
+        VideoExtraRules = opcoes.VideoExtraRules.Select(r => new { ExtraType = r.ExtraType.ToString(), RuleType = r.RuleType.ToString(), r.Token, MediaType = r.MediaType.ToString() })
+    }, new JsonSerializerOptions(json) { WriteIndented = true }));
+    return;
+}
 string? linha;
 while ((linha = Console.ReadLine()) is not null)
 {

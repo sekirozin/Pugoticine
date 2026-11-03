@@ -261,3 +261,17 @@
 {"tipo":"filme","caminho":"[Erai-raws] Jujutsu Kaisen - 03 [720p][Multiple Subtitle].mkv","video":true,"nomeArquivo":"Jujutsu Kaisen","anoArquivo":null,"extra":null,"nomePasta":null,"anoPasta":null}
 {"tipo":"filme","caminho":"After The Sunset - [0004].mkv","video":true,"nomeArquivo":"After The Sunset -","anoArquivo":null,"extra":null,"nomePasta":null,"anoPasta":null}
 {"tipo":"filme","caminho":"Run lola run (lola rennt) (2009).mp4","video":true,"nomeArquivo":"Run lola run (lola rennt)","anoArquivo":2009,"extra":null,"nomePasta":null,"anoPasta":null}
+{"tipo":"filme","caminho":"Matrix (1999)/trailers/Matrix trailer.mkv","video":true,"nomeArquivo":"Matrix","anoArquivo":null,"extra":"Trailer","nomePasta":"Matrix","anoPasta":1999}
+{"tipo":"filme","caminho":"Matrix (1999)/Matrix (1999)-trailer.mkv","video":true,"nomeArquivo":"Matrix","anoArquivo":1999,"extra":"Trailer","nomePasta":"Matrix","anoPasta":1999}
+{"tipo":"filme","caminho":"Matrix (1999)/trailer.mp4","video":true,"nomeArquivo":"trailer","anoArquivo":null,"extra":"Trailer","nomePasta":"Matrix","anoPasta":1999}
+{"tipo":"filme","caminho":"Matrix (1999)/behind the scenes/making of.mkv","video":true,"nomeArquivo":"making of","anoArquivo":null,"extra":"BehindTheScenes","nomePasta":"Matrix","anoPasta":1999}
+{"tipo":"filme","caminho":"Matrix (1999)/extras/entrevista.mkv","video":true,"nomeArquivo":"entrevista","anoArquivo":null,"extra":"Unknown","nomePasta":"Matrix","anoPasta":1999}
+{"tipo":"filme","caminho":"Matrix (1999)/Matrix-featurette.mkv","video":true,"nomeArquivo":"Matrix","anoArquivo":null,"extra":"Featurette","nomePasta":"Matrix","anoPasta":1999}
+{"tipo":"filme","caminho":"Matrix (1999)/Matrix-deleted2.mkv","video":true,"nomeArquivo":"Matrix-deleted2","anoArquivo":null,"extra":"DeletedScene","nomePasta":"Matrix","anoPasta":1999}
+{"tipo":"filme","caminho":"Matrix (1999)/sample.mkv","video":true,"nomeArquivo":"sample","anoArquivo":null,"extra":"Sample","nomePasta":"Matrix","anoPasta":1999}
+{"tipo":"filme","caminho":"Matrix (1999)/Matrix (1999)-sample.mkv","video":true,"nomeArquivo":"Matrix","anoArquivo":1999,"extra":"Sample","nomePasta":"Matrix","anoPasta":1999}
+{"tipo":"filme","caminho":"Matrix (1999)/featurettes/bastidores.mkv","video":true,"nomeArquivo":"bastidores","anoArquivo":null,"extra":"Featurette","nomePasta":"Matrix","anoPasta":1999}
+{"tipo":"filme","caminho":"Matrix (1999)/shorts/curta.mp4","video":true,"nomeArquivo":"curta","anoArquivo":null,"extra":"Short","nomePasta":"Matrix","anoPasta":1999}
+{"tipo":"filme","caminho":"Matrix (1999)/Matrix.1999.1080p.BluRay.x264.mkv","video":true,"nomeArquivo":"Matrix","anoArquivo":1999,"extra":null,"nomePasta":"Matrix","anoPasta":1999}
+{"tipo":"filme","caminho":"Matrix (1999)/theme.mp3","video":false,"nomeArquivo":null,"anoArquivo":null,"extra":null,"nomePasta":"Matrix","anoPasta":1999}
+{"tipo":"filme","caminho":"trailers/solto.mkv","video":true,"nomeArquivo":"solto","anoArquivo":null,"extra":"Trailer","nomePasta":"trailers","anoPasta":null}
