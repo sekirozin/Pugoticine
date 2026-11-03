@@ -66,3 +66,328 @@ export function renderPainel(painel, escapeHtml) {
     </div>
   </section>`;
 }
+
+// ======================================================================================================
+// Painel completo: menu lateral do Painel do Jellyfin 10.11.10 (Servidor, Dispositivos, TV ao Vivo, Plugins,
+// Avançado) com uma tela por item. As telas de configuração são montadas a partir do esquema do servidor
+// (/api/painel/config/:id); as de lista têm tela própria. Cada tela mostra o que tem efeito de verdade.
+const GRUPOS = ["Servidor", "Dispositivos", "TV ao Vivo", "Plugins", "Avançado"];
+const ICONES = {
+  painel: "M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z", geral: "M12 15a3 3 0 1 0 0-6a3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3a1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9a1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z",
+  marca: "M12 3l2.6 5.3l5.9.9l-4.3 4.1l1 5.8L12 16.4L6.8 19.1l1-5.8L3.5 9.2l5.9-.9z", usuarios: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8a4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8",
+  Bibliotecas: "M4 4h4v16H4zM10 4h4v16h-4zM16 5l4 1l-3 15l-4-1z", "Reprodução": "M5 3l14 9l-14 9z",
+  dispositivos: "M4 5h16v10H4zM2 19h20M9 15v4M15 15v4", atividade: "M3 12h4l3-8l4 16l3-8h4", "tv-ao-vivo": "M3 7h18v13H3zM8 2l4 5l4-5", dvr: "M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8a4 4 0 0 0 0 8z",
+  plugins: "M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4", redes: "M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18zM3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18",
+  chaves: "M15 7a4 4 0 1 1-4 4l-8 8h3v-2h2v-2h2l2-2", backups: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5l5-5M12 15V3", registros: "M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h8", tarefas: "M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18zM12 7v5l3 3"
+};
+const icone = (nome) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONES[nome] ?? ICONES.geral}"/></svg>`;
+const AVISOS = { real: "painel-aviso-real", parcial: "painel-aviso-parcial", salvo: "painel-aviso-salvo" };
+
+const estado = { paginas: [], atual: "painel", timer: null, container: null, f: null, abertos: new Set() };
+try { estado.atual = sessionStorage.getItem("painel:pagina") || "painel"; } catch { /* sem sessionStorage */ }
+
+export function fecharPainel() { clearTimeout(estado.timer); estado.timer = null; estado.container = null; }
+
+export async function abrirPainel(container, ferramentas) {
+  estado.container = container; estado.f = ferramentas;
+  if (!estado.paginas.length) {
+    try { estado.paginas = (await ferramentas.api("/api/painel/paginas")).paginas; }
+    catch (erro) { container.innerHTML = `<div class="empty">${ferramentas.escapeHtml(erro.message)}</div>`; return; }
+  }
+  if (!estado.paginas.some((p) => p.id === estado.atual)) estado.atual = "painel";
+  const atual = estado.paginas.find((p) => p.id === estado.atual);
+  if (atual?.pai) estado.abertos.add(atual.pai);
+  container.innerHTML = `<div class="painel-app"><nav class="painel-menu" aria-label="Painel">${menu()}</nav><div class="painel-conteudo" data-painel-conteudo></div></div>`;
+  container.querySelectorAll("[data-painel-ir]").forEach((b) => b.addEventListener("click", () => irPara(b.dataset.painelIr)));
+  container.querySelectorAll("[data-painel-expandir]").forEach((b) => b.addEventListener("click", () => {
+    const pai = b.dataset.painelExpandir;
+    estado.abertos.has(pai) ? estado.abertos.delete(pai) : estado.abertos.add(pai);
+    abrirPainel(container, ferramentas);
+  }));
+  await mostrarPagina();
+}
+
+function irPara(id) {
+  estado.atual = id;
+  try { sessionStorage.setItem("painel:pagina", id); } catch { /* ignora */ }
+  abrirPainel(estado.container, estado.f);
+}
+
+function menu() {
+  const e = estado.f.escapeHtml;
+  const item = (p, sub = false) => `<button type="button" class="painel-menu-item${sub ? " sub" : ""}${p.id === estado.atual ? " ativo" : ""}" data-painel-ir="${p.id}"${p.id === estado.atual ? ' aria-current="page"' : ""}>${sub ? "" : icone(p.id)}<span>${e(p.titulo === "Configurações de NFO" ? "NFO" : p.titulo === "Pré-visualizações de vídeo" ? "Trickplay" : p.titulo)}</span></button>`;
+  return GRUPOS.map((grupo) => {
+    const doGrupo = estado.paginas.filter((p) => p.grupo === grupo);
+    const html = [];
+    for (const p of doGrupo) {
+      if (!p.pai) { html.push(item(p)); continue; }
+      if (html.includes(`pai:${p.pai}`)) continue;
+      html.push(`pai:${p.pai}`);
+      const filhos = doGrupo.filter((x) => x.pai === p.pai);
+      const aberto = estado.abertos.has(p.pai);
+      html.push(`<button type="button" class="painel-menu-item${filhos.some((x) => x.id === estado.atual) ? " contem-ativo" : ""}" data-painel-expandir="${e(p.pai)}" aria-expanded="${aberto}">${icone(p.pai)}<span>${e(p.pai)}</span><b class="painel-seta">${aberto ? "▾" : "▸"}</b></button>`);
+      if (aberto) html.push(...filhos.map((x) => item(x, true)));
+    }
+    return `<div class="painel-menu-grupo"><h4>${e(grupo)}</h4>${html.filter((h) => !h.startsWith("pai:")).join("")}</div>`;
+  }).join("");
+}
+
+async function mostrarPagina() {
+  clearTimeout(estado.timer);
+  const alvo = estado.container?.querySelector("[data-painel-conteudo]");
+  if (!alvo) return;
+  const p = estado.paginas.find((x) => x.id === estado.atual);
+  const e = estado.f.escapeHtml;
+  const aviso = `<p class="painel-aviso ${AVISOS[p.efeito.tipo]}" data-painel-aviso="${p.efeito.tipo}">${e(p.efeito.texto)}</p>`;
+  const cabecalho = (extra = "") => `<div class="painel-cabecalho"><h2 data-painel-titulo>${e(p.titulo)}</h2>${extra}</div>${aviso}`;
+  try {
+    const telas = { painel: telaVisaoGeral, usuarios: telaUsuarios, bibliotecas: telaBibliotecas, dispositivos: telaDispositivos, atividade: telaAtividade, "tv-ao-vivo": telaTvAoVivo, chaves: telaChaves, backups: telaBackups, tarefas: telaTarefas };
+    if (telas[p.id]) { await telas[p.id](alvo, cabecalho); return; }
+    // Telas de configuração (e Plugins/Registros, que têm configuração e lista).
+    const { pagina, valores } = await estado.f.api(`/api/painel/config/${p.id}`);
+    alvo.innerHTML = `${cabecalho()}${p.id === "plugins" ? listaPlugins() : ""}${formulario(pagina, valores)}${p.id === "registros" ? '<section class="painel-cartao"><h3>Arquivos de registro</h3><div data-painel-arquivos>Carregando...</div><pre class="painel-log" data-painel-log hidden></pre></section>' : ""}`;
+    ligarFormulario(alvo, pagina);
+    if (p.id === "registros") await listaRegistros(alvo);
+  } catch (erro) {
+    alvo.innerHTML = `${cabecalho()}<div class="empty">${e(erro.message)}</div>`;
+  }
+}
+
+// ---------- formulário genérico ----------
+function campoHtml(c, valor) {
+  const e = estado.f.escapeHtml;
+  const id = `campo-${c.chave}`;
+  const ajuda = c.ajuda ? `<small class="painel-ajuda">${e(c.ajuda)}</small>` : "";
+  if (c.tipo === "booleano") return `<label class="painel-campo painel-check"><input type="checkbox" name="${c.chave}" ${valor ? "checked" : ""}><span>${e(c.rotulo)}</span></label>${ajuda}`;
+  let entrada;
+  if (c.tipo === "selecao") entrada = `<select id="${id}" name="${c.chave}">${c.opcoes.map((o) => `<option value="${e(o.valor)}" ${String(valor) === o.valor ? "selected" : ""}>${e(o.rotulo)}</option>`).join("")}</select>`;
+  else if (c.tipo === "multipla") entrada = `<div class="painel-multipla" data-multipla="${c.chave}">${c.opcoes.map((o) => `<label class="painel-check"><input type="checkbox" value="${e(o.valor)}" ${valor.includes(o.valor) ? "checked" : ""}><span>${e(o.rotulo)}</span></label>`).join("")}</div>`;
+  else if (c.tipo === "lista" || c.tipo === "textoLongo") entrada = `<textarea id="${id}" name="${c.chave}" rows="${c.tipo === "lista" ? 3 : 6}">${e(c.tipo === "lista" ? valor.join("\n") : valor ?? "")}</textarea>`;
+  else entrada = `<input id="${id}" name="${c.chave}" type="${c.tipo === "numero" ? "number" : c.tipo === "senha" ? "password" : "text"}" value="${e(valor ?? "")}"${c.min !== undefined ? ` min="${c.min}"` : ""}${c.max !== undefined ? ` max="${c.max}"` : ""}${c.tipo === "numero" ? ' step="any"' : ""}>`;
+  return `<label class="painel-campo" for="${id}"><span>${e(c.rotulo)}</span>${entrada}</label>${ajuda}`;
+}
+
+function formulario(pagina, valores) {
+  const e = estado.f.escapeHtml;
+  return `<form class="painel-form" data-painel-form="${pagina.id}" novalidate>${pagina.secoes.map((s) => `<section class="painel-cartao">${s.titulo ? `<h3>${e(s.titulo)}</h3>` : ""}${s.campos.map((c) => `<div class="painel-grupo-campo" data-campo="${c.chave}">${campoHtml(c, valores[c.chave])}<small class="painel-erro" data-erro="${c.chave}"></small></div>`).join("")}</section>`).join("")}
+    <div class="painel-acoes"><button type="submit" class="painel-botao primario">Salvar</button><span class="painel-status" data-painel-status role="status"></span></div></form>`;
+}
+
+function ligarFormulario(alvo, pagina) {
+  const form = alvo.querySelector("[data-painel-form]");
+  if (!form) return;
+  form.addEventListener("submit", async (evento) => {
+    evento.preventDefault();
+    const dados = {};
+    for (const s of pagina.secoes) for (const c of s.campos) {
+      if (c.tipo === "booleano") dados[c.chave] = form.querySelector(`[name="${c.chave}"]`).checked;
+      else if (c.tipo === "multipla") dados[c.chave] = [...form.querySelectorAll(`[data-multipla="${c.chave}"] input:checked`)].map((i) => i.value);
+      else dados[c.chave] = form.querySelector(`[name="${c.chave}"]`).value;
+    }
+    form.querySelectorAll("[data-erro]").forEach((x) => { x.textContent = ""; });
+    const status = form.querySelector("[data-painel-status]");
+    status.textContent = "Salvando...";
+    try {
+      const resposta = await fetch(`/api/painel/config/${pagina.id}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(dados) });
+      const corpo = await resposta.json();
+      if (!resposta.ok) {
+        status.textContent = corpo.error || "Não foi possível salvar.";
+        if (corpo.campo) form.querySelector(`[data-erro="${corpo.campo}"]`).textContent = corpo.error;
+        return;
+      }
+      status.textContent = "Configurações salvas.";
+      estado.f.toast("Configurações salvas.");
+      if (pagina.id === "geral" || pagina.id === "marca") estado.f.aoMudarMarca?.();
+    } catch (erro) { status.textContent = erro.message; }
+  });
+}
+
+// ---------- telas de lista ----------
+const tabela = (cabecalhos, linhas, vazio) => linhas.length
+  ? `<div class="painel-tabela-rolagem"><table class="painel-tabela"><thead><tr>${cabecalhos.map((c) => `<th>${c}</th>`).join("")}</tr></thead><tbody>${linhas.join("")}</tbody></table></div>`
+  : `<p class="painel-vazio">${vazio}</p>`;
+
+async function telaVisaoGeral(alvo, cabecalho) {
+  const painel = await estado.f.api("/api/painel");
+  if (estado.atual !== "painel" || !alvo.isConnected) return;
+  alvo.innerHTML = cabecalho() + renderPainel(painel, estado.f.escapeHtml).replace(/<div class="section-heading">[\s\S]*?<\/div><\/div>/, "");
+  alvo.querySelector("[data-painel-varrer]")?.addEventListener("click", async (ev) => {
+    ev.currentTarget.disabled = true; ev.currentTarget.textContent = "Escaneando...";
+    const r = await estado.f.api("/api/catalog/scan", { method: "POST", body: "{}" }).catch((erro) => { estado.f.toast(erro.message); return null; });
+    if (r) { estado.f.aoVarrer?.(r.media); estado.f.toast(`Biblioteca atualizada: ${r.media.length} filme(s).`); }
+    mostrarPagina();
+  });
+  estado.timer = setTimeout(() => { if (estado.atual === "painel" && alvo.isConnected) mostrarPagina(); }, 10000);
+}
+
+async function telaUsuarios(alvo, cabecalho) {
+  const e = estado.f.escapeHtml;
+  const { usuarios, voce } = await estado.f.api("/api/painel/usuarios");
+  alvo.innerHTML = cabecalho() + `<section class="painel-cartao"><div class="painel-usuarios">${usuarios.map((u) => `
+    <button type="button" class="painel-usuario${u.desativado ? " desativado" : ""}" data-usuario="${e(u.usuario)}">
+      <span class="painel-avatar">${e(u.nome.charAt(0).toUpperCase())}</span><strong>${e(u.nome)}</strong>
+      <small>${u.papel === "admin" ? "Administrador" : "Usuário"}${u.desativado ? " · Desativado" : ""}</small><small>Último acesso ${e(relativo(u.ultimoAcesso))}</small></button>`).join("") || '<p class="painel-vazio">Ninguém entrou ainda.</p>'}</div></section><div data-painel-editar-usuario></div>`;
+  alvo.querySelectorAll("[data-usuario]").forEach((b) => b.addEventListener("click", () => editarUsuario(alvo, usuarios.find((u) => u.usuario === b.dataset.usuario), voce)));
+}
+
+function editarUsuario(alvo, u, voce) {
+  const e = estado.f.escapeHtml;
+  const area = alvo.querySelector("[data-painel-editar-usuario]");
+  area.innerHTML = `<form class="painel-form" data-form-usuario><section class="painel-cartao"><h3>Editar usuário: ${e(u.nome)}</h3>
+    ${u.desativado ? '<p class="painel-aviso painel-aviso-salvo">Este usuário está desativado atualmente</p>' : ""}
+    <label class="painel-campo"><span>Nome</span><input value="${e(u.nome)}" disabled></label><small class="painel-ajuda">Nome, senha e imagem são da conta do PugotiLab.</small>
+    <label class="painel-campo painel-check"><input type="checkbox" disabled ${u.papel === "admin" ? "checked" : ""}><span>Permitir que este usuário gerencie o servidor</span></label><small class="painel-ajuda">Definido pelo PugotiLab.</small>
+    <h3>Acesso aos Recursos</h3>
+    <label class="painel-campo painel-check"><input type="checkbox" name="desativado" ${u.desativado ? "checked" : ""} ${u.usuario === voce ? "disabled" : ""}><span>Desativar este usuário</span></label><small class="painel-ajuda">Tem efeito: o usuário desativado não consegue usar o PugotiCine.</small>
+    <label class="painel-campo painel-check"><input type="checkbox" name="oculto" ${u.oculto ? "checked" : ""}><span>Ocultar este usuário das telas de login</span></label>
+    <label class="painel-campo"><span>Limite do bitrate para streaming da internet (Mbps)</span><input type="number" name="limiteBitrateMbps" min="0" max="1000" step="any" value="${u.limiteBitrateMbps}"></label>
+    <label class="painel-campo"><span>Número máximo de sessões de usuários simultâneas</span><input type="number" name="maxSessoes" min="0" max="100" value="${u.maxSessoes}"></label>
+    <label class="painel-campo"><span>Acesso às salas (SyncPlay)</span><select name="acessoSalas">${[["criar", "Permitir que o usuário crie e participe em grupos"], ["participar", "Permitir que o usuário participe de grupos"], ["nenhum", "Desativado para esse usuário"]].map(([v, r]) => `<option value="${v}" ${u.acessoSalas === v ? "selected" : ""}>${r}</option>`).join("")}</select></label>
+    <small class="painel-ajuda">Ocultar, bitrate, sessões e salas: ainda não implementados no PugotiCine (são salvos).</small>
+    <div class="painel-acoes"><button type="submit" class="painel-botao primario">Salvar</button><button type="button" class="painel-botao" data-cancelar>Cancelar</button>${u.usuario !== voce ? '<button type="button" class="painel-botao perigo" data-excluir-usuario>Excluir Usuário</button>' : ""}<span class="painel-status" data-painel-status></span></div></section></form>`;
+  const form = area.querySelector("form");
+  form.querySelector("[data-cancelar]").addEventListener("click", () => { area.innerHTML = ""; });
+  form.querySelector("[data-excluir-usuario]")?.addEventListener("click", async () => {
+    if (!confirm("Deseja realmente excluir este usuário?")) return;
+    await fetch(`/api/painel/usuarios/${encodeURIComponent(u.usuario)}`, { method: "DELETE" });
+    mostrarPagina();
+  });
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const dados = { oculto: form.oculto.checked, limiteBitrateMbps: form.limiteBitrateMbps.value, maxSessoes: form.maxSessoes.value, acessoSalas: form.acessoSalas.value };
+    if (!form.desativado.disabled) dados.desativado = form.desativado.checked;
+    const r = await fetch(`/api/painel/usuarios/${encodeURIComponent(u.usuario)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(dados) });
+    const corpo = await r.json();
+    form.querySelector("[data-painel-status]").textContent = r.ok ? "Configurações salvas." : corpo.error;
+    if (r.ok) { estado.f.toast("Configurações salvas."); setTimeout(mostrarPagina, 300); }
+  });
+}
+
+async function telaBibliotecas(alvo, cabecalho) {
+  const e = estado.f.escapeHtml;
+  const { bibliotecas } = await estado.f.api("/api/painel/bibliotecas");
+  alvo.innerHTML = cabecalho(`<div class="painel-acoes-topo"><button type="button" class="painel-botao" disabled title="Ainda não implementado no PugotiCine">Adicionar Biblioteca de Mídia</button><button type="button" class="painel-botao primario" data-rastrear>Rastrear Todas as Bibliotecas</button></div>`)
+    + `<div class="painel-bibliotecas">${bibliotecas.map((b) => `<section class="painel-cartao painel-biblioteca-cartao"><div class="painel-biblioteca-icone">${icone("Bibliotecas")}</div><h3>${e(b.nome)}</h3><code>${e(b.caminho)}</code><span>${b.itens} itens · tipo de conteúdo: Filmes</span><span>Última varredura ${e(relativo(b.ultimaVarredura))}</span></section>`).join("")}</div>`;
+  alvo.querySelector("[data-rastrear]").addEventListener("click", async (ev) => {
+    ev.currentTarget.disabled = true; ev.currentTarget.textContent = "Rastreando...";
+    await estado.f.api("/api/painel/bibliotecas/rastrear", { method: "POST", body: "{}" });
+    estado.f.toast("Bibliotecas rastreadas.");
+    mostrarPagina();
+  });
+}
+
+async function telaDispositivos(alvo, cabecalho) {
+  const e = estado.f.escapeHtml;
+  const { dispositivos } = await estado.f.api("/api/painel/dispositivos");
+  alvo.innerHTML = cabecalho(`<button type="button" class="painel-botao perigo" data-excluir-todos ${dispositivos.length ? "" : "disabled"}>Excluir tudo</button>`) + `<section class="painel-cartao">${tabela(
+    ["Dispositivo", "Nome do app", "Usuário", "Ultima vez ativo", ""],
+    dispositivos.map((d) => `<tr data-dispositivo="${d.id}"><td>${e(d.nome)}<small class="painel-ajuda">${e(d.ip)}</small></td><td>${e(d.aplicativo)}</td><td>${e(d.usuario)}</td><td>${e(relativo(d.ultimoAcesso))}</td><td><button type="button" class="painel-botao pequeno" data-excluir-dispositivo="${d.id}">Excluir</button></td></tr>`),
+    "Nenhum dispositivo.")}</section>`;
+  alvo.querySelectorAll("[data-excluir-dispositivo]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("Deseja realmente excluir este dispositivo? Ele reaparecerá da próxima vez que um usuário entrar com ele.")) return;
+    await fetch(`/api/painel/dispositivos/${b.dataset.excluirDispositivo}`, { method: "DELETE" });
+    mostrarPagina();
+  }));
+  alvo.querySelector("[data-excluir-todos]")?.addEventListener("click", async () => {
+    if (!confirm("Tem certeza de que deseja excluir todos os dispositivos?")) return;
+    await fetch("/api/painel/dispositivos", { method: "DELETE" });
+    mostrarPagina();
+  });
+}
+
+async function telaAtividade(alvo, cabecalho) {
+  const e = estado.f.escapeHtml;
+  const filtro = estado.filtroAtividade ?? "";
+  const { eventos } = await estado.f.api(`/api/painel/atividade${filtro ? `?tipo=${filtro}` : ""}`);
+  const niveis = { Information: "Informação", Warning: "Aviso", Error: "Erro" };
+  alvo.innerHTML = cabecalho(`<div class="painel-filtros">${[["", "Todos"], ["usuario", "Usuário"], ["sistema", "Sistema"]].map(([v, r]) => `<button type="button" class="painel-filtro${v === filtro ? " ativo" : ""}" data-filtro="${v}">${r}</button>`).join("")}</div>`)
+    + `<section class="painel-cartao" data-painel-eventos>${tabela(["Hora", "Usuário", "Nível", "Nome", "Tipo"],
+      eventos.map((ev) => `<tr><td>${e(data(ev.data))}</td><td>${e(ev.usuario ?? "Sistema")}</td><td><span class="painel-nivel ${ev.nivel}">${niveis[ev.nivel] ?? ev.nivel}</span></td><td>${e(ev.nome)}${ev.detalhe ? `<small class="painel-ajuda">${e(ev.detalhe)}</small>` : ""}</td><td>${e(ev.tipo)}</td></tr>`),
+      "Nenhuma atividade registrada.")}</section>`;
+  alvo.querySelectorAll("[data-filtro]").forEach((b) => b.addEventListener("click", () => { estado.filtroAtividade = b.dataset.filtro; mostrarPagina(); }));
+}
+
+async function telaTvAoVivo(alvo, cabecalho) {
+  alvo.innerHTML = cabecalho() + `<section class="painel-cartao"><h3>Sintonizadores</h3><p class="painel-vazio">Nenhum sintonizador.</p><button type="button" class="painel-botao" disabled>Adicionar sintonizador</button></section>
+    <section class="painel-cartao"><h3>Provedores de Dados do Guia da TV</h3><p class="painel-vazio">Nenhum provedor.</p><button type="button" class="painel-botao" disabled>Adicionar provedor</button> <button type="button" class="painel-botao" disabled>Atualizar Dados do Guia</button></section>`;
+}
+
+function listaPlugins() {
+  return `<section class="painel-cartao" data-painel-plugins><div class="painel-filtros"><button type="button" class="painel-filtro ativo">Todos</button><button type="button" class="painel-filtro">Instalado</button><button type="button" class="painel-filtro">Disponível</button></div><p class="painel-vazio">Nenhum plugin instalado.</p></section>`;
+}
+
+async function telaChaves(alvo, cabecalho) {
+  const e = estado.f.escapeHtml;
+  const { chaves } = await estado.f.api("/api/painel/chaves");
+  alvo.innerHTML = cabecalho() + `<section class="painel-cartao"><form class="painel-nova-chave" data-nova-chave><h3>Nova Chave de API</h3>
+      <label class="painel-campo"><span>Nome do app</span><input name="nome" maxlength="80" required></label><small class="painel-ajuda">Uma leitura humana para identificar chaves API. Essa configuração não afetará funcionalidade.</small>
+      <div class="painel-acoes"><button type="submit" class="painel-botao primario">Criar</button></div><div data-chave-criada></div></form></section>
+    <section class="painel-cartao">${tabela(["Chave da API", "Aplicativo", "Data da Emissão", "Último uso", ""],
+      chaves.map((c) => `<tr data-chave="${c.id}"><td><code>${e(c.prefixo)}…</code></td><td>${e(c.nome)}</td><td>${e(data(c.criadoEm))}</td><td>${e(relativo(c.ultimoUso))}</td><td><button type="button" class="painel-botao pequeno perigo" data-revogar="${c.id}">Revogar</button></td></tr>`),
+      "Nenhuma chave criada.")}</section>`;
+  alvo.querySelector("[data-nova-chave]").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const r = await fetch("/api/painel/chaves", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ nome: ev.currentTarget.nome.value }) });
+    const corpo = await r.json();
+    if (!r.ok) { estado.f.toast(corpo.error); return; }
+    await mostrarPagina();
+    alvo.querySelector("[data-chave-criada]").innerHTML = `<p class="painel-aviso painel-aviso-real">Copie a chave agora; ela não será mostrada de novo. Use no cabeçalho <code>X-PugotiCine-Token</code>.</p><code class="painel-token" data-token>${e(corpo.token)}</code>`;
+  });
+  alvo.querySelectorAll("[data-revogar]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("Tem certeza que deseja revogar esta chave de API? A conexão da aplicação com este servidor será encerrada abruptamente.")) return;
+    await fetch(`/api/painel/chaves/${b.dataset.revogar}`, { method: "DELETE" });
+    mostrarPagina();
+  }));
+}
+
+async function telaBackups(alvo, cabecalho) {
+  const e = estado.f.escapeHtml;
+  const { backups } = await estado.f.api("/api/painel/backups");
+  alvo.innerHTML = cabecalho(`<button type="button" class="painel-botao primario" data-criar-backup>Criar backup</button>`) + `<section class="painel-cartao">${tabela(["Arquivo", "Tamanho", "Criado em", ""],
+    backups.map((b) => `<tr data-backup="${e(b.nome)}"><td>${e(b.nome)}</td><td>${bytes(b.tamanho)}</td><td>${e(data(b.criadoEm))}</td><td class="painel-acoes-linha"><a class="painel-botao pequeno" href="/api/painel/backups/${encodeURIComponent(b.nome)}" download>Baixar</a><button type="button" class="painel-botao pequeno" data-restaurar="${e(b.nome)}">Restaurar</button><button type="button" class="painel-botao pequeno perigo" data-excluir-backup="${e(b.nome)}">Excluir</button></td></tr>`),
+    "Nenhum backup ainda.")}</section>`;
+  alvo.querySelector("[data-criar-backup]").addEventListener("click", async (ev) => {
+    ev.currentTarget.disabled = true; ev.currentTarget.textContent = "Criando...";
+    const r = await estado.f.api("/api/painel/backups", { method: "POST", body: "{}" }).catch((erro) => { estado.f.toast(erro.message); return null; });
+    if (r) estado.f.toast(`Backup criado: ${r.backup.nome}`);
+    mostrarPagina();
+  });
+  alvo.querySelectorAll("[data-restaurar]").forEach((b) => b.addEventListener("click", async () => {
+    const r = await fetch(`/api/painel/backups/${encodeURIComponent(b.dataset.restaurar)}/restaurar`, { method: "POST" });
+    estado.f.toast((await r.json()).error ?? "Restauração concluída com sucesso");
+  }));
+  alvo.querySelectorAll("[data-excluir-backup]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("Excluir este backup?")) return;
+    await fetch(`/api/painel/backups/${encodeURIComponent(b.dataset.excluirBackup)}`, { method: "DELETE" });
+    mostrarPagina();
+  }));
+}
+
+async function listaRegistros(alvo) {
+  const e = estado.f.escapeHtml;
+  const { arquivos } = await estado.f.api("/api/painel/registros");
+  const lista = alvo.querySelector("[data-painel-arquivos]");
+  lista.innerHTML = arquivos.length ? `<div class="painel-registros">${arquivos.map((a) => `<button type="button" class="painel-registro" data-registro="${e(a.nome)}"><strong>${e(a.nome)}</strong><small>${bytes(a.tamanho)} · ${e(data(a.modificadoEm))}</small></button>`).join("")}</div>` : '<p class="painel-vazio">Nenhum arquivo de registro.</p>';
+  lista.querySelectorAll("[data-registro]").forEach((b) => b.addEventListener("click", async () => {
+    const r = await fetch(`/api/painel/registros/${encodeURIComponent(b.dataset.registro)}`);
+    const pre = alvo.querySelector("[data-painel-log]");
+    pre.hidden = false;
+    pre.textContent = await r.text();
+    pre.scrollTop = pre.scrollHeight;
+  }));
+}
+
+async function telaTarefas(alvo, cabecalho) {
+  const e = estado.f.escapeHtml;
+  const { tarefas } = await estado.f.api("/api/painel/tarefas");
+  const resultado = { Completed: "Concluída", Failed: "Falhou" };
+  alvo.innerHTML = cabecalho() + ["Biblioteca", "Metadados"].map((categoria) => `<section class="painel-cartao"><h3>${categoria}</h3>${tarefas.filter((t) => t.categoria === categoria).map((t) => `
+    <div class="painel-tarefa-linha" data-tarefa="${t.id}"><div><strong>${e(t.nome)}</strong><small class="painel-ajuda">${e(t.descricao)}</small>
+      <small class="painel-ajuda">${t.executando ? "Executando..." : `Última execução ${e(relativo(t.ultimaExecucao))}${t.duracaoMs !== null ? `, levou ${(t.duracaoMs / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} s` : ""}${t.resultado ? ` · ${resultado[t.resultado]}` : ""} · a cada ${t.intervaloMinutos} min · próxima ${e(data(t.proximaExecucao))}`}</small>${t.erro ? `<small class="painel-erro">${e(t.erro)}</small>` : ""}</div>
+      <button type="button" class="painel-botao pequeno" data-executar="${t.id}" title="Executar agora" ${t.executando ? "disabled" : ""}>▶ Executar</button></div>`).join("")}</section>`).join("");
+  alvo.querySelectorAll("[data-executar]").forEach((b) => b.addEventListener("click", async () => {
+    b.disabled = true; b.textContent = "Executando...";
+    await estado.f.api(`/api/painel/tarefas/${b.dataset.executar}/executar`, { method: "POST", body: "{}" });
+    mostrarPagina();
+  }));
+}
