@@ -15,6 +15,8 @@ import { disco, infoServidor, montarPainel } from "./painel/painel.js";
 import { Transcoder } from "./transcoder.js";
 import { GerenciadorHls } from "./reproducao/hls.js";
 import { CacheKeyframes } from "./reproducao/keyframes.js";
+import { GerenciadorSalas } from "./salas/salas.js";
+import { RotasSalas } from "./salas/rotas.js";
 import type { PlaybackPlan, PlaybackRequest, PugotiProfile } from "./types.js";
 
 fs.mkdirSync(config.dataDir, { recursive: true });
@@ -25,6 +27,7 @@ const probe = new ProbeService(path.join(config.dataDir, "probe-cache.json"));
 const transcoder = new Transcoder(path.join(config.dataDir, "transcodes"));
 fs.mkdirSync(config.dataDir, { recursive: true });
 const hls = new GerenciadorHls(path.join(config.dataDir, "hls"), new CacheKeyframes(path.join(config.dataDir, "keyframes.json")), config.ffmpegPath);
+const salas = new RotasSalas(new GerenciadorSalas(path.join(config.dataDir, "salas.db")), (id) => Boolean(catalog.get(id)), json, body);
 let lastScanAt = "";
 
 function scan(): void {
@@ -58,6 +61,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<voi
   const profile = await authenticated(req, res);
   if (!profile) return;
   const url = new URL(req.url ?? "/", "http://localhost");
+  if (await salas.tratar(req, res, url, profile)) return;
 
   if (url.pathname === "/api/bootstrap" && req.method === "GET") {
     json(res, 200, { profile, media: publicMedia(), progress: store.listProgress(profile.username), lastScanAt });
@@ -204,6 +208,7 @@ function shutdown(): void {
   clearInterval(scanTimer);
   transcoder.stop();
   hls.parar();
+  salas.parar();
   server.close(() => process.exit(0));
 }
 process.on("SIGINT", shutdown);

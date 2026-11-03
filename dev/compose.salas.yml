@@ -1,0 +1,13 @@
+# Sobreposição para testar as salas ao lado do ambiente principal (portas 3032/3035, projeto pugoticine-salas):
+#   PUGOTICINE_MIDIA=~/IA/Fontes/Pugoticine-midia-teste docker compose -p pugoticine-salas \
+#     -f compose.desenvolvimento.yml -f dev/compose.salas.yml up -d --build
+services:
+  pugoticine:
+    image: pugoticine:salas
+    ports: !override
+      - "127.0.0.1:3032:3012"
+    environment:
+      PUGOTILAB_LOGIN_URL: "http://127.0.0.1:3035/auth"
+  login-dev:
+    ports: !override
+      - "127.0.0.1:3035:8080"

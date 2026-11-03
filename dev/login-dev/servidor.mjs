@@ -4,7 +4,9 @@
 import http from "node:http";
 const USUARIOS = {
   sekiro: { username: "sekiro", displayName: "sekiro", role: "admin" },
-  marcos: { username: "marcos", displayName: "marcos", role: "user" }
+  marcos: { username: "marcos", displayName: "marcos", role: "user" },
+  mael: { username: "mael", displayName: "mael", role: "user" },
+  ivis: { username: "ivis", displayName: "ivis", role: "user" }
 };
 const cookie = (req, nome) => (req.headers.cookie ?? "").split(";").map(p => p.trim().split("=")).find(([k]) => k === nome)?.[1];
 const escapar = (t) => String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
