@@ -1,13 +1,34 @@
+# Desenvolvimento do PugotiCine no notebook (substitui a referência Jellyfin, removida em 03/11).
+#   PUGOTICINE_MIDIA=~/IA/Fontes/Pugoticine-midia-teste docker compose -f compose.desenvolvimento.yml up -d --build
+#   PugotiCine: http://127.0.0.1:3012   ·   login de desenvolvimento (no lugar do PugotiLab): http://127.0.0.1:3015/auth
 services:
-  pugoticine-desenvolvimento:
-    image: jellyfin/jellyfin:10.11.10
+  pugoticine:
+    build: .
+    image: pugoticine:desenvolvimento
     ports:
-      - "127.0.0.1:3013:8096"
+      - "127.0.0.1:3012:3012"
+    environment:
+      PORT: "3012"
+      MEDIA_ROOT: "/media/movies"
+      DATA_DIR: "/app/data"
+      DB_FILE: "/app/data/pugoticine.db"
+      PUGOTILAB_PROFILE_URL: "http://login-dev:8080/auth/api/profile"
+      PUGOTILAB_LOGIN_URL: "http://127.0.0.1:3015/auth"
+      SCAN_INTERVAL_MS: "60000"
+      TZ: "America/Maceio"
     volumes:
-      - pugoticine-config:/config
-      - pugoticine-cache:/cache
-      - ${PUGOTICINE_MIDIA:?Defina a pasta de mídia de teste}:/media:ro
+      - pugoticine-dados:/app/data
+      - ${PUGOTICINE_MIDIA:?Defina a pasta de mídia de teste}/Filmes:/media/movies:ro
+    depends_on:
+      - login-dev
+    restart: "no"
+  login-dev:
+    image: node:20-alpine
+    command: ["node", "/login/servidor.mjs"]
+    volumes:
+      - ./dev/login-dev:/login:ro
+    ports:
+      - "127.0.0.1:3015:8080"
     restart: "no"
 volumes:
-  pugoticine-config:
-  pugoticine-cache:
+  pugoticine-dados:

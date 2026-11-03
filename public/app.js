@@ -24,8 +24,9 @@ function escapeHtml(value) {
   })[char]);
 }
 
-function login() {
-  location.assign(`https://pugotilab.com/auth?return=${encodeURIComponent(location.href)}`);
+// O servidor informa o endereço de login (PUGOTILAB_LOGIN_URL); sem ele, o PugotiLab de produção.
+function login(loginUrl = "https://pugotilab.com/auth") {
+  location.assign(`${loginUrl}?return=${encodeURIComponent(location.href)}`);
 }
 
 async function api(url, options = {}) {
@@ -34,7 +35,8 @@ async function api(url, options = {}) {
     headers: { "content-type": "application/json", ...(options.headers || {}) }
   });
   if (response.status === 401) {
-    login();
+    const dados = await response.json().catch(() => ({}));
+    login(dados.loginUrl || undefined);
     throw new Error("Login necessário");
   }
   const data = await response.json();
