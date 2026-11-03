@@ -41,12 +41,16 @@
     atual: null, eventos: null, assistindo: false, ultimaVersao: 0, reproducao: null,
     ignorarAte: { play: 0, pause: 0, seek: 0, waiting: 0 }, abrindo: false, prontoEnviado: 0,
     corrigindoAte: 0, inicioAgendado: null, tempoPing: null, carregandoAvisado: false, status: "",
+    // Registro curto (últimos 60 eventos) para diagnóstico: window.pugoticineSalas.sala.registro.
+    registro: [],
+    anotar(texto) { const v = this.video(); this.registro.push(`${new Date().toISOString().slice(11, 23)} t=${v ? v.currentTime.toFixed(2) : "-"} ${texto}`); if (this.registro.length > 60) this.registro.shift(); },
 
     video() { return document.getElementById("player"); },
     ignorar(tipo, ms = 800) { this.ignorarAte[tipo] = Date.now() + ms; },
     ignorando(tipo) { return this.abrindo || Date.now() < this.ignorarAte[tipo]; },
     async comando(tipo, extra = {}) {
       if (!this.atual) return;
+      if (tipo !== "ping") this.anotar(`envia ${tipo} ${JSON.stringify(extra)}`);
       try { await api(`/api/salas/${this.atual.id}/comandos`, { method: "POST", body: JSON.stringify({ tipo, ...extra }) }); }
       catch (e) { aviso(e.message); }
     },
@@ -64,6 +68,7 @@
         this.comando("ping", { ping: Math.round(relogio.ping) });
       }, 5000);
       this.comando("ping", { ping: Math.round(relogio.ping) });
+      indicador();
       renderizar();
     },
     sair(atualizarTela = true) {
@@ -74,6 +79,7 @@
       const v = this.video();
       if (v) v.playbackRate = 1;
       $("#sala-barra")?.remove();
+      indicador();
       if (atualizarTela) renderizar();
     },
     receber(info) {
@@ -82,6 +88,7 @@
       if (info.reproducao.versao > this.ultimaVersao) {
         this.ultimaVersao = info.reproducao.versao;
         this.reproducao = info.reproducao;
+        this.anotar(`recebe v${info.reproducao.versao} ${info.reproducao.estado} pos=${info.reproducao.posicao.toFixed(2)}`);
         this.prontoEnviado = 0;
         this.aplicar().catch((e) => console.error("Sala:", e));
       }
@@ -110,8 +117,12 @@
         await pc.abrirPlayer(r.mediaId);
         const v = this.video();
         await new Promise((ok) => (v.readyState >= 1 ? ok() : v.addEventListener("loadedmetadata", ok, { once: true })));
-        setTimeout(() => { this.abrindo = false; }, 1200);
-        if (this.reproducao !== r) return; // chegou estado novo enquanto abria
+        // O player retoma do progresso pessoal ("continuar de onde parou"); na sala manda a posição do grupo. Espera esse
+        // salto do próprio player assentar e só então aplica o estado da sala (que leva cada um ao ponto do grupo).
+        await new Promise((ok) => setTimeout(ok, 1200));
+        this.abrindo = false;
+        this.anotar("player aberto; aplicando a posição da sala");
+        if (this.reproducao !== r) return this.aplicar(); // chegou estado novo enquanto abria
       }
       const v = this.video();
       clearTimeout(this.inicioAgendado);
@@ -190,6 +201,7 @@
     const v = sala.video();
     if (!v || v.dataset.salasLigado) return;
     v.dataset.salasLigado = "1";
+    for (const evento of ["play", "pause", "seeking", "seeked", "waiting", "canplay"]) v.addEventListener(evento, () => sala.atual && sala.anotar(`evento ${evento}${sala.ignorando(evento === "seeking" || evento === "seeked" ? "seek" : evento === "canplay" ? "waiting" : evento) ? " (ignorado)" : ""}`));
     v.addEventListener("play", () => { if (sala.atual && sala.assistindo && !sala.ignorando("play")) sala.comando("tocar", { posicao: v.currentTime }); });
     v.addEventListener("pause", () => { if (sala.atual && sala.assistindo && !v.ended && !sala.ignorando("pause")) sala.comando("pausar", { posicao: v.currentTime }); });
     v.addEventListener("seeked", () => { if (sala.atual && sala.assistindo && !sala.ignorando("seek")) sala.comando("pular", { posicao: v.currentTime }); });
@@ -203,6 +215,16 @@
     setInterval(() => sala.corrigir(), 500);
     // Fechar o player sai do modo "assistindo" (continua na sala).
     document.getElementById("player-close")?.addEventListener("click", () => { sala.assistindo = false; sala.barra(); renderizar(); }, true);
+  }
+
+  // Ícone aceso enquanto a pessoa está numa sala (como o SyncPlay ativo no cabeçalho do Jellyfin).
+  function indicador() {
+    const botao = document.getElementById("salas-abrir");
+    if (!botao) return;
+    botao.classList.toggle("ativo", Boolean(sala.atual));
+    const texto = sala.atual ? `Salas de Filmes — você está em "${sala.atual.nome}"` : "Salas de Filmes";
+    botao.title = texto;
+    botao.setAttribute("aria-label", texto);
   }
 
   // ---------- telas ----------
@@ -277,11 +299,16 @@
 
   function montar() {
     if ($("#salas-painel")) return;
-    const nav = document.querySelector(".sidebar nav");
+    // Como o SyncPlay do jellyfin-web (scripts/libraryMenu.js:49): botão com o ícone "groups" no cabeçalho, à direita,
+    // antes da busca e do perfil — não no menu lateral.
+    const topo = document.querySelector(".topbar");
     const botao = document.createElement("button");
-    botao.className = "nav-item"; botao.id = "salas-abrir"; botao.type = "button";
-    botao.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M15 14.5c2.8 0 5 2.2 5 5"/></svg><span>Salas</span>';
-    nav?.append(botao);
+    botao.className = "icon-button salas-topo"; botao.id = "salas-abrir"; botao.type = "button";
+    botao.title = "Salas de Filmes"; botao.setAttribute("aria-label", "Salas de Filmes");
+    botao.innerHTML = '<svg class="salas-icone" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12.75c1.63 0 3.07.39 4.24.9 1.08.48 1.76 1.56 1.76 2.73V18H6v-1.61c0-1.18.68-2.26 1.76-2.73 1.17-.52 2.61-.91 4.24-.91zM4 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm1.13 1.1c-.37-.06-.74-.1-1.13-.1-.99 0-1.93.21-2.78.58C.48 14.9 0 15.62 0 16.43V18h4.5v-1.61c0-.83.23-1.61.63-2.29zM20 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm4 3.43c0-.81-.48-1.53-1.22-1.85-.85-.37-1.79-.58-2.78-.58-.39 0-.76.04-1.13.1.4.68.63 1.46.63 2.29V18H24v-1.57zM12 6c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3z"/></svg>';
+    const busca = topo?.querySelector(".search");
+    if (busca) topo.insertBefore(botao, busca);
+    else topo?.insertBefore(botao, topo.querySelector("#profile-button"));
     const painel = document.createElement("section");
     painel.id = "salas-painel"; painel.className = "salas-painel"; painel.hidden = true;
     painel.innerHTML = '<div class="salas-caixa"><div class="sala-cabecalho"><h2>Salas de filme</h2><button class="sala-botao secundario" data-salas-fechar>Fechar</button></div><div id="salas-corpo"></div></div>';

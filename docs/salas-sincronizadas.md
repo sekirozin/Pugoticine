@@ -51,7 +51,7 @@ Quem entra com senha ou com o código passa a ter acesso permanente (`participan
 **Persistência:** as salas ficam em SQLite (`data/salas.db`). A presença de cada pessoa e o estado da reprodução ficam em memória e recomeçam pausados depois de reiniciar o servidor.
 
 ### Cliente: `public/salas.js` e `public/salas.css`
-- **Onde fica na tela:** um botão "Salas" no menu lateral abre o painel para listar, criar, entrar, convidar, copiar o link de convite, escolher o filme e encerrar a sala.
+- **Onde fica na tela:** como o SyncPlay do jellyfin-web (`src/scripts/libraryMenu.js:49`, ícone `groups` no cabeçalho, antes de transmitir, busca e usuário), o botão "Salas de Filmes" fica na barra superior, à direita, antes da busca e do perfil, e não no menu lateral. Ele acende (ponto verde) quando a pessoa está numa sala e abre o painel para listar, criar, entrar, convidar, copiar o link de convite, escolher o filme e encerrar a sala.
 - **Sincronização:**
   - mede o relógio com pings (8 medidas, vale a de menor atraso) e informa o ping a cada 5 s;
   - inicia o vídeo no instante combinado e aplica os estados recebidos do servidor;
