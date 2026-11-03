@@ -110,3 +110,37 @@ test("PQA-219: remux com quadros B — reiniciar o FFmpeg num segmento anterior 
   }
   gerenciador.encerrar(id);
 });
+
+test("PQA-222: linha de comando da GPU (VAAPI) como a do Jellyfin, e software quando não dá", async () => {
+  const { argumentosFfmpeg } = await import("./hls.js");
+  const plano: PlaybackPlan = { mode: "transcode", reason: "teste", targetHeight: 720, toneMap: false, audioStreamIndex: info.audioTracks[0].streamIndex, subtitleStreamIndex: null, audioCopy: false };
+  const base = { entrada: video, info, plano, copiaVideo: false, segmento: 3, inicioSegundos: 18, pasta };
+  const gpuLeH264 = argumentosFfmpeg({ ...base, aceleracao: { dispositivo: "/dev/dri/renderD128", decodifica: ["h264"] } }).join(" ");
+  assert.match(gpuLeH264, /-hwaccel vaapi -hwaccel_device \/dev\/dri\/renderD128 -hwaccel_output_format vaapi/);
+  assert.match(gpuLeH264, /-vf scale_vaapi=format=nv12:w=-2:h='min\(720,ih\)' -c:v h264_vaapi/);
+  assert.match(gpuLeH264, /-force_key_frames:0 expr:gte\(t,n_forced\*6\)/);
+  const gpuSoCodifica = argumentosFfmpeg({ ...base, aceleracao: { dispositivo: "/dev/dri/renderD128", decodifica: [] } }).join(" ");
+  assert.match(gpuSoCodifica, /-init_hw_device vaapi=va:\/dev\/dri\/renderD128 -filter_hw_device va/);
+  assert.match(gpuSoCodifica, /-vf scale=w=-2:h='min\(720,ih\)',format=nv12,hwupload -c:v h264_vaapi/);
+  assert.doesNotMatch(gpuSoCodifica, /-hwaccel /);
+  const software = argumentosFfmpeg({ ...base, aceleracao: null }).join(" ");
+  assert.match(software, /-c:v libx264/);
+  assert.doesNotMatch(software, /vaapi/);
+  // Remux nunca usa a GPU (só copia); tone mapping também fica no software.
+  assert.doesNotMatch(argumentosFfmpeg({ ...base, copiaVideo: true, aceleracao: { dispositivo: "/dev/dri/renderD128", decodifica: ["h264"] } }).join(" "), /vaapi/);
+  assert.doesNotMatch(argumentosFfmpeg({ ...base, plano: { ...plano, toneMap: true }, aceleracao: { dispositivo: "/dev/dri/renderD128", decodifica: ["h264"] } }).join(" "), /vaapi/);
+});
+
+test("PQA-222: se a GPU falha, a sessão passa para software sozinha e o segmento sai igual", async () => {
+  const quebrada = new GerenciadorHls(path.join(pasta, "hls-gpu"), new CacheKeyframes(path.join(pasta, "keyframes2.json")), "ffmpeg", { dispositivo: path.join(pasta, "gpu-inexistente"), decodifica: ["h264"] });
+  try {
+    const plano: PlaybackPlan = { mode: "transcode", reason: "teste", targetHeight: null, toneMap: false, audioStreamIndex: info.audioTracks[0].streamIndex, subtitleStreamIndex: null, audioCopy: false };
+    const id = quebrada.criar("ivis", media, info, plano);
+    const sessao = quebrada.sessao(id, "ivis", media.id)!;
+    const s4 = await quebrada.segmento(sessao, 4);
+    assert.equal(sessao.semGpu, true, "marcou a sessão como software");
+    assert.equal(sessao.trabalho!.gpu, false);
+    const init = await quebrada.segmento(sessao, -1);
+    assert.ok(Math.abs(inicioDoSegmento(init, s4).pts - 24) < 0.05, "segmento 4 começa em 24 s");
+  } finally { quebrada.parar(); }
+});

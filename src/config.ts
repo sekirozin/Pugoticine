@@ -15,5 +15,8 @@ export const config = {
   radarrUrl: (process.env.RADARR_URL ?? "").replace(/\/$/, ""),
   radarrApiKey: process.env.RADARR_API_KEY ?? "",
   scanIntervalMs: Number(process.env.SCAN_INTERVAL_MS ?? 15 * 60 * 1000),
-  ffmpegPath: process.env.FFMPEG_PATH ?? "ffmpeg"
+  ffmpegPath: process.env.FFMPEG_PATH ?? "ffmpeg",
+  // Aceleração da conversão de vídeo, como a "Aceleração de hardware" do Jellyfin: "vaapi" ou "nenhuma".
+  aceleracao: process.env.PUGOTICINE_ACELERACAO === "vaapi" ? "vaapi" as const : "nenhuma" as const,
+  dispositivoVaapi: process.env.PUGOTICINE_VAAPI_DISPOSITIVO ?? "/dev/dri/renderD128"
 };

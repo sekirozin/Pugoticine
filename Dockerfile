@@ -1,7 +1,9 @@
 FROM node:20-alpine
 
 WORKDIR /app
-RUN apk add --no-cache python3 make g++ ffmpeg
+# Drivers VAAPI: mesa-va-gallium (AMD/Intel recentes via Mesa) e libva-intel-driver (Intel antigas, como a HD 4600
+# Haswell do Zima, que o driver novo da Intel não atende). Sem GPU, o player converte por software.
+RUN apk add --no-cache python3 make g++ ffmpeg mesa-va-gallium libva-intel-driver
 
 COPY package*.json ./
 RUN npm ci

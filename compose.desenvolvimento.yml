@@ -15,10 +15,14 @@ services:
       PUGOTILAB_PROFILE_URL: "http://login-dev:8080/auth/api/profile"
       PUGOTILAB_LOGIN_URL: "http://127.0.0.1:3015/auth"
       SCAN_INTERVAL_MS: "60000"
+      PUGOTICINE_ACELERACAO: "vaapi"
       TZ: "America/Maceio"
     volumes:
       - pugoticine-dados:/app/data
       - ${PUGOTICINE_MIDIA:?Defina a pasta de mídia de teste}/Filmes:/media/movies:ro
+    # GPU para a conversão (VAAPI); sem /dev/dri o PugotiCine detecta e converte por software.
+    devices:
+      - /dev/dri:/dev/dri
     depends_on:
       - login-dev
     restart: "no"

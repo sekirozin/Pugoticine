@@ -15,6 +15,7 @@ import { disco, infoServidor, montarPainel } from "./painel/painel.js";
 import { Transcoder } from "./transcoder.js";
 import { GerenciadorHls } from "./reproducao/hls.js";
 import { CacheKeyframes } from "./reproducao/keyframes.js";
+import { detectarVaapi } from "./reproducao/aceleracao.js";
 import { GerenciadorSalas } from "./salas/salas.js";
 import { RotasSalas } from "./salas/rotas.js";
 import type { PlaybackPlan, PlaybackRequest, PugotiProfile } from "./types.js";
@@ -26,7 +27,12 @@ const metadata = new MetadataCatalog();
 const probe = new ProbeService(path.join(config.dataDir, "probe-cache.json"));
 const transcoder = new Transcoder(path.join(config.dataDir, "transcodes"));
 fs.mkdirSync(config.dataDir, { recursive: true });
-const hls = new GerenciadorHls(path.join(config.dataDir, "hls"), new CacheKeyframes(path.join(config.dataDir, "keyframes.json")), config.ffmpegPath);
+// Aceleração por GPU (VAAPI), como a do Jellyfin: testada uma vez ao iniciar; sem GPU ou se o teste falhar, software.
+const aceleracao = config.aceleracao === "vaapi" ? detectarVaapi(config.ffmpegPath, config.dispositivoVaapi) : null;
+console.log(config.aceleracao === "vaapi"
+  ? aceleracao ? `Aceleração de vídeo: VAAPI em ${aceleracao.dispositivo} (codifica H.264; decodifica ${aceleracao.decodifica.join(", ") || "nada"}).` : `Aceleração de vídeo: VAAPI pedida, mas ${config.dispositivoVaapi} não codificou H.264; usando software.`
+  : "Aceleração de vídeo: desligada (software).");
+const hls = new GerenciadorHls(path.join(config.dataDir, "hls"), new CacheKeyframes(path.join(config.dataDir, "keyframes.json")), config.ffmpegPath, aceleracao);
 const salas = new RotasSalas(new GerenciadorSalas(path.join(config.dataDir, "salas.db")), (id) => Boolean(catalog.get(id)), json, body);
 let lastScanAt = "";
 

@@ -10,6 +10,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { MediaItem, MediaTechnicalInfo, PlaybackPlan } from "../types.js";
+import type { Aceleracao } from "./aceleracao.js";
 import type { CacheKeyframes } from "./keyframes.js";
 import { iniciosDosSegmentos, playlistVod, segmentosIguais, segmentosPorKeyframes } from "./segmentos.js";
 
@@ -18,16 +19,26 @@ const SALTO_QUE_REINICIA_S = 24; // segmentGapRequiringTranscodingChange = 24 / 
 const ESPERA_MAXIMA_MS = 90_000;
 const SESSAO_OCIOSA_MS = 3 * 60_000;
 
-interface Trabalho { processo: ChildProcess; inicio: number; proximo: number; terminou: boolean; codigo: number | null; diagnostico: string }
+interface Trabalho { processo: ChildProcess; inicio: number; proximo: number; terminou: boolean; codigo: number | null; diagnostico: string; gpu: boolean }
 interface Sessao {
   id: string; usuario: string; media: MediaItem; info: MediaTechnicalInfo; plano: PlaybackPlan;
   copiaVideo: boolean; duracoes: number[]; inicios: number[]; pasta: string;
   trabalho: Trabalho | null; ultimoAcesso: number; fila: Promise<unknown>;
+  /** A GPU falhou nesta sessão: daqui em diante, software. */
+  semGpu: boolean;
 }
 
 export interface OpcoesArgumentos {
   entrada: string; info: MediaTechnicalInfo; plano: PlaybackPlan; copiaVideo: boolean;
   segmento: number; inicioSegundos: number; pasta: string; ffmpegThreads?: number;
+  /** GPU por VAAPI (null = software). */
+  aceleracao?: Aceleracao | null;
+}
+
+/** A GPU converte este vídeo? Tone mapping e legenda em imagem continuam por software (como no caminho simples do Jellyfin). */
+export function usaAceleracao(o: Pick<OpcoesArgumentos, "aceleracao" | "copiaVideo" | "plano" | "info">): boolean {
+  const legenda = o.info.subtitleTracks.find(t => t.streamIndex === o.plano.subtitleStreamIndex);
+  return Boolean(o.aceleracao) && !o.copiaVideo && !o.plano.toneMap && legenda?.kind !== "bitmap";
 }
 
 /** Linha de comando do FFmpeg para gerar os segmentos a partir de `segmento` (GetCommandLineArguments). */
@@ -36,6 +47,11 @@ export function argumentosFfmpeg(o: OpcoesArgumentos): string[] {
   const audio = o.info.audioTracks.find(t => t.streamIndex === o.plano.audioStreamIndex);
   const legenda = o.info.subtitleTracks.find(t => t.streamIndex === o.plano.subtitleStreamIndex);
   const args = ["-hide_banner", "-nostdin", "-loglevel", "warning"];
+  const gpu = usaAceleracao(o) ? o.aceleracao! : null;
+  // Decodifica na GPU quando ela lê o codec; senão decodifica no processador e envia os quadros para a GPU (hwupload).
+  const decodificaNaGpu = Boolean(gpu?.decodifica.includes(video.codec));
+  if (gpu && decodificaNaGpu) args.push("-hwaccel", "vaapi", "-hwaccel_device", gpu.dispositivo, "-hwaccel_output_format", "vaapi");
+  else if (gpu) args.push("-init_hw_device", `vaapi=va:${gpu.dispositivo}`, "-filter_hw_device", "va");
   // No remux, o -ss na entrada cai no keyframe anterior ao ponto de busca, e o FFmpeg recua sozinho 3/23 s (~0,13 s)
   // antes de buscar quando o vídeo tem quadros B (fftools/ffmpeg_demux.c, "dts_heuristic"). Pedir o tempo exato do
   // keyframe caía no keyframe ANTERIOR e o segmento N saía com o conteúdo do N-1: o player via buraco e pulava ou
@@ -43,8 +59,17 @@ export function argumentosFfmpeg(o: OpcoesArgumentos): string[] {
   // compensa o recuo e ainda fica antes do keyframe seguinte (sempre a mais de 1 s).
   if (o.inicioSegundos > 0) args.push("-ss", (o.copiaVideo ? o.inicioSegundos + 0.25 : o.inicioSegundos).toFixed(6));
   args.push("-i", o.entrada, "-map_metadata", "-1", "-map_chapters", "-1", "-threads", String(o.ffmpegThreads ?? 0));
+  const taxaAlvo = o.plano.targetHeight && o.plano.targetHeight <= 480 ? 1_500_000 : o.plano.targetHeight && o.plano.targetHeight <= 720 ? 3_000_000 : 8_000_000;
+  // Keyframe no início de cada segmento. "t" conta do início da saída (depois do -ss), não do -copyts.
+  const keyframes = ["-force_key_frames:0", `expr:gte(t,n_forced*${SEGUNDOS_POR_SEGMENTO})`];
   if (o.copiaVideo) {
     args.push("-map", `0:${video.streamIndex}`, "-c:v", "copy");
+  }
+  else if (gpu) {
+    const altura = o.plano.targetHeight ? `:w=-2:h='min(${o.plano.targetHeight},ih)'` : "";
+    const filtro = decodificaNaGpu ? `scale_vaapi=format=nv12${altura}` : `${o.plano.targetHeight ? `scale=w=-2:h='min(${o.plano.targetHeight},ih)',` : ""}format=nv12,hwupload`;
+    args.push("-map", `0:${video.streamIndex}`, "-vf", filtro, "-c:v", "h264_vaapi",
+      "-b:v", String(taxaAlvo), "-maxrate", String(taxaAlvo), "-bufsize", String(taxaAlvo * 2), ...keyframes);
   }
   else {
     const filtros: string[] = [];
@@ -53,12 +78,11 @@ export function argumentosFfmpeg(o: OpcoesArgumentos): string[] {
     filtros.push("format=yuv420p");
     if (legenda?.kind === "bitmap") args.push("-filter_complex", `[0:${video.streamIndex}][0:${legenda.streamIndex}]overlay,${filtros.join(",")}[v]`, "-map", "[v]");
     else args.push("-map", `0:${video.streamIndex}`, "-vf", filtros.join(","));
-    const taxa = o.plano.targetHeight && o.plano.targetHeight <= 480 ? 1_500_000 : o.plano.targetHeight && o.plano.targetHeight <= 720 ? 3_000_000 : 8_000_000;
+    const taxa = taxaAlvo;
     args.push("-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-maxrate", String(taxa), "-bufsize", String(taxa * 2),
       "-profile:v", "high", "-level", "4.1", "-sc_threshold", "0",
-      // Keyframe no início de cada segmento. "t" conta do início da saída (depois do -ss), não do -copyts:
-      // verificado com o FFmpeg (expressão com o deslocamento absoluto não força nada e o corte cai no GOP padrão).
-      "-force_key_frames:0", `expr:gte(t,n_forced*${SEGUNDOS_POR_SEGMENTO})`);
+      // Verificado com o FFmpeg: expressão com o deslocamento absoluto não força nada e o corte cai no GOP padrão.
+      ...keyframes);
   }
   if (audio) {
     args.push("-map", `0:${audio.streamIndex}`);
@@ -79,7 +103,7 @@ export function argumentosFfmpeg(o: OpcoesArgumentos): string[] {
 export class GerenciadorHls {
   private readonly sessoes = new Map<string, Sessao>();
   private readonly limpeza: NodeJS.Timeout;
-  constructor(private readonly raiz: string, private readonly keyframes: CacheKeyframes, private readonly ffmpeg = "ffmpeg") {
+  constructor(private readonly raiz: string, private readonly keyframes: CacheKeyframes, private readonly ffmpeg = "ffmpeg", private readonly aceleracao: Aceleracao | null = null) {
     fs.rmSync(raiz, { recursive: true, force: true });
     fs.mkdirSync(raiz, { recursive: true });
     this.limpeza = setInterval(() => {
@@ -98,7 +122,7 @@ export class GerenciadorHls {
     const id = crypto.randomUUID();
     const pasta = path.join(this.raiz, id);
     fs.mkdirSync(pasta, { recursive: true });
-    this.sessoes.set(id, { id, usuario, media, info, plano, copiaVideo, duracoes, inicios: iniciosDosSegmentos(duracoes), pasta, trabalho: null, ultimoAcesso: Date.now(), fila: Promise.resolve() });
+    this.sessoes.set(id, { id, usuario, media, info, plano, copiaVideo, duracoes, inicios: iniciosDosSegmentos(duracoes), pasta, trabalho: null, ultimoAcesso: Date.now(), fila: Promise.resolve(), semGpu: false });
     return id;
   }
 
@@ -150,6 +174,15 @@ export class GerenciadorHls {
     while (Date.now() < limite) {
       if (fs.existsSync(arquivo)) return arquivo;
       const t = s.trabalho;
+      if (t?.terminou && t.codigo !== null && t.codigo !== 0 && t.gpu && !s.semGpu) {
+        // A GPU falhou: o resto da sessão converte por software, sem o player perceber.
+        console.error(`Aceleração de vídeo falhou em ${s.media.title}; convertendo por software. ${t.diagnostico.slice(-300)}`);
+        s.semGpu = true;
+        const refazer = s.fila.then(() => this.garantirTrabalho(s, numero, false));
+        s.fila = refazer.catch(() => undefined);
+        await refazer;
+        continue;
+      }
       if (!t || (t.terminou && !fs.existsSync(arquivo))) {
         if (t?.terminou && t.codigo === 0 && numero >= t.inicio) await new Promise(r => setTimeout(r, 50));
         if (fs.existsSync(arquivo)) return arquivo;
@@ -174,11 +207,12 @@ export class GerenciadorHls {
     if (t && !t.terminou) t.processo.kill("SIGKILL");
     for (const nome of fs.readdirSync(s.pasta)) if (nome.endsWith(".tmp")) fs.rmSync(path.join(s.pasta, nome), { force: true });
     const inicio = pediuInit && t ? t.inicio : numero;
-    const processo = spawn(this.ffmpeg, argumentosFfmpeg({
+    const opcoes = {
       entrada: s.media.absolutePath, info: s.info, plano: s.plano, copiaVideo: s.copiaVideo,
-      segmento: inicio, inicioSegundos: s.inicios[inicio] ?? 0, pasta: s.pasta
-    }), { stdio: ["ignore", "ignore", "pipe"] });
-    const trabalho: Trabalho = { processo, inicio, proximo: inicio, terminou: false, codigo: null, diagnostico: "" };
+      segmento: inicio, inicioSegundos: s.inicios[inicio] ?? 0, pasta: s.pasta, aceleracao: s.semGpu ? null : this.aceleracao
+    };
+    const processo = spawn(this.ffmpeg, argumentosFfmpeg(opcoes), { stdio: ["ignore", "ignore", "pipe"] });
+    const trabalho: Trabalho = { processo, inicio, proximo: inicio, terminou: false, codigo: null, diagnostico: "", gpu: usaAceleracao(opcoes) };
     processo.stderr?.on("data", d => { trabalho.diagnostico = `${trabalho.diagnostico}${d}`.slice(-4000); });
     processo.once("exit", codigo => { trabalho.terminou = true; trabalho.codigo = codigo; });
     s.trabalho = trabalho;
