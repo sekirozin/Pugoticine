@@ -1,7 +1,9 @@
 (() => {
   if (document.querySelector('#pugotilab-ambient')) return;
   const style = document.createElement('style');
-  style.textContent = '#pugotilab-ambient{position:fixed;inset:0;z-index:0;width:100%;height:100%;pointer-events:none;opacity:.78}body>*:not(#pugotilab-ambient):not(script):not(style):not(link){position:relative;z-index:1}@media(prefers-reduced-motion:reduce){#pugotilab-ambient{opacity:.55}}';
+  // :where() zera a especificidade: com o "#pugotilab-ambient" dentro do :not() a regra vencia as classes e
+  // transformava a barra do topo, o menu, o player e o aviso (position: fixed) em position: relative.
+  style.textContent = '#pugotilab-ambient{position:fixed;inset:0;z-index:0;width:100%;height:100%;pointer-events:none;opacity:.78}:where(body>*:not(#pugotilab-ambient,script,style,link)){position:relative;z-index:1}@media(prefers-reduced-motion:reduce){#pugotilab-ambient{opacity:.55}}';
   document.head.append(style);
   const canvas = document.createElement('canvas');
   canvas.id = 'pugotilab-ambient';
