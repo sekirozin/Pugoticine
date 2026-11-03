@@ -1,3 +1,5 @@
+import { renderPainel } from "/painel.js";
+
 const state = {
   profile: null,
   media: [],
@@ -99,7 +101,29 @@ function section(title, description, items) {
   </section>`;
 }
 
+// Painel do administrador (public/painel.js): carrega /api/painel e atualiza a cada 10 s enquanto aberto.
+async function renderPainelView() {
+  clearTimeout(renderPainelView.timer);
+  if (state.view !== "painel") return;
+  try {
+    const painel = await api("/api/painel");
+    if (state.view !== "painel") return;
+    content.innerHTML = renderPainel(painel, escapeHtml);
+    content.querySelector("[data-painel-varrer]")?.addEventListener("click", async (event) => {
+      event.currentTarget.disabled = true;
+      event.currentTarget.textContent = "Escaneando...";
+      const result = await api("/api/catalog/scan", { method: "POST", body: "{}" }).catch((error) => { toast(error.message); return null; });
+      if (result) { state.media = result.media; toast(`Biblioteca atualizada: ${result.media.length} filme(s).`); }
+      renderPainelView();
+    });
+  } catch (error) {
+    content.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
+  }
+  renderPainelView.timer = setTimeout(renderPainelView, 10000);
+}
+
 function render() {
+  if (state.view === "painel") { renderPainelView(); return; }
   const items = visibleMedia();
   if (state.view === "home" && !state.query) {
     const recent = state.media.filter((item) => {
@@ -375,6 +399,7 @@ async function bootstrap() {
     $("#avatar-fallback").textContent = (data.profile.nickname || data.profile.username).charAt(0).toUpperCase();
     if (data.profile.avatarUrl) $("#avatar").src = data.profile.avatarUrl;
     $("#scan-button").hidden = data.profile.role !== "admin";
+    $("#painel-button").hidden = data.profile.role !== "admin";
     render();
     const requestedMedia = new URLSearchParams(location.search).get("play");
     if (requestedMedia && state.media.some((item) => item.id === requestedMedia)) {

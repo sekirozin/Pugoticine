@@ -25,6 +25,11 @@ export class Store {
     const rows = this.db.prepare("SELECT mediaId, position, duration, completed, updatedAt FROM watch_progress WHERE userId = ? ORDER BY updatedAt DESC").all(userId) as Array<Omit<WatchProgress, "completed"> & { completed: number }>;
     return rows.map((row) => ({ ...row, completed: Boolean(row.completed) }));
   }
+  /** Atividade de todos os usuários, mais recente primeiro (Painel do administrador). */
+  listActivity(limit = 50): Array<{ usuario: string; mediaId: string; posicao: number; duracao: number; concluido: boolean; atualizadoEm: string }> {
+    const rows = this.db.prepare("SELECT userId, mediaId, position, duration, completed, updatedAt FROM watch_progress ORDER BY updatedAt DESC LIMIT ?").all(limit) as Array<{ userId: string; mediaId: string; position: number; duration: number; completed: number; updatedAt: string }>;
+    return rows.map((r) => ({ usuario: r.userId, mediaId: r.mediaId, posicao: r.position, duracao: r.duration, concluido: Boolean(r.completed), atualizadoEm: r.updatedAt }));
+  }
   saveProgress(userId: string, mediaId: string, position: number, duration: number): WatchProgress {
     const safePosition = Math.max(0, Number.isFinite(position) ? position : 0);
     const safeDuration = Math.max(0, Number.isFinite(duration) ? duration : 0);
