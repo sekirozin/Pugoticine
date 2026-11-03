@@ -30,10 +30,10 @@ export class Store {
     const rows = this.db.prepare("SELECT userId, mediaId, position, duration, completed, updatedAt FROM watch_progress ORDER BY updatedAt DESC LIMIT ?").all(limit) as Array<{ userId: string; mediaId: string; position: number; duration: number; completed: number; updatedAt: string }>;
     return rows.map((r) => ({ usuario: r.userId, mediaId: r.mediaId, posicao: r.position, duracao: r.duration, concluido: Boolean(r.completed), atualizadoEm: r.updatedAt }));
   }
-  saveProgress(userId: string, mediaId: string, position: number, duration: number): WatchProgress {
+  saveProgress(userId: string, mediaId: string, position: number, duration: number, limiteConcluido = 0.9): WatchProgress {
     const safePosition = Math.max(0, Number.isFinite(position) ? position : 0);
     const safeDuration = Math.max(0, Number.isFinite(duration) ? duration : 0);
-    const completed = safeDuration > 0 && safePosition / safeDuration >= 0.9;
+    const completed = safeDuration > 0 && safePosition / safeDuration >= limiteConcluido;
     const updatedAt = new Date().toISOString();
     this.db.prepare(`
       INSERT INTO watch_progress (userId, mediaId, position, duration, completed, updatedAt)

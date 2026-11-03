@@ -11,7 +11,10 @@ import { MetadataCatalog } from "./metadata.js";
 import { createPlaybackPlan } from "./playback.js";
 import { ProbeService } from "./probe.js";
 import { Store } from "./store.js";
-import { disco, infoServidor, montarPainel } from "./painel/painel.js";
+import { BancoPainel } from "./painel/banco.js";
+import { Backups } from "./painel/backups.js";
+import { Registros } from "./painel/registros.js";
+import { RotasPainel } from "./painel/rotas.js";
 import { Transcoder } from "./transcoder.js";
 import { GerenciadorHls } from "./reproducao/hls.js";
 import { CacheKeyframes } from "./reproducao/keyframes.js";
@@ -20,6 +23,9 @@ import { RotasSalas } from "./salas/rotas.js";
 import type { PlaybackPlan, PlaybackRequest, PugotiProfile } from "./types.js";
 
 fs.mkdirSync(config.dataDir, { recursive: true });
+// Painel › Registros: o que o processo escreve no console também vai para data/registros/log_AAAAMMDD.log.
+const registros = new Registros(path.join(config.dataDir, "registros"));
+registros.instalar();
 const catalog = new Catalog(config.mediaRoot);
 const store = new Store(config.dbFile);
 const metadata = new MetadataCatalog();
@@ -29,6 +35,17 @@ fs.mkdirSync(config.dataDir, { recursive: true });
 const hls = new GerenciadorHls(path.join(config.dataDir, "hls"), new CacheKeyframes(path.join(config.dataDir, "keyframes.json")), config.ffmpegPath);
 const salas = new RotasSalas(new GerenciadorSalas(path.join(config.dataDir, "salas.db")), (id) => Boolean(catalog.get(id)), json, body);
 let lastScanAt = "";
+const versaoApp = JSON.parse(fs.readFileSync(path.join(config.publicDir, "..", "package.json"), "utf8")).version as string;
+const bancoPainel = new BancoPainel(path.join(config.dataDir, "painel.db"));
+const painel = new RotasPainel({
+  banco: bancoPainel, registros, json, corpo: body,
+  backups: new Backups(path.join(config.dataDir, "backups"), [
+    { nome: "pugoticine.db", arquivo: config.dbFile }, { nome: "painel.db", arquivo: path.join(config.dataDir, "painel.db") },
+    { nome: "salas.db", arquivo: path.join(config.dataDir, "salas.db") }], versaoApp),
+  catalogo: () => catalog.list(), ultimaVarredura: () => lastScanAt, atividadeProgresso: () => store.listActivity(50),
+  varrer: async () => { scan(); return catalog.list().length; }, atualizarMetadados: () => metadata.refresh(),
+  intervaloMs: config.scanIntervalMs, raizMidia: config.mediaRoot, pastaDados: config.dataDir, ffmpeg: config.ffmpegPath, versao: versaoApp
+});
 
 function scan(): void {
   const items = catalog.scan();
@@ -48,7 +65,8 @@ async function body<T>(req: IncomingMessage): Promise<T> {
 }
 
 async function authenticated(req: IncomingMessage, res: ServerResponse): Promise<PugotiProfile | null> {
-  const profile = await getProfile(req);
+  // Sem sessão do PugotiLab, vale uma chave do Painel › Chaves da API (acesso de administrador).
+  const profile = await getProfile(req) ?? painel.perfilPorChave(req);
   if (!profile) json(res, 401, { error: "Entre com sua conta Pugotilab.", loginUrl: config.pugotilabLoginUrl });
   return profile;
 }
@@ -61,6 +79,10 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<voi
   const profile = await authenticated(req, res);
   if (!profile) return;
   const url = new URL(req.url ?? "/", "http://localhost");
+  // Painel › Usuários: registra o acesso e bloqueia quem foi desativado.
+  const bloqueio = painel.verificarAcesso(profile, req);
+  if (bloqueio) { json(res, 403, { error: bloqueio }); return; }
+  if (await painel.tratar(req, res, url, profile)) return;
   if (await salas.tratar(req, res, url, profile)) return;
 
   if (url.pathname === "/api/bootstrap" && req.method === "GET") {
@@ -74,22 +96,12 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<voi
     json(res, 200, { media: publicMedia(), lastScanAt });
     return;
   }
-  // Painel do administrador (equivale à página inicial do Painel do Jellyfin).
-  if (url.pathname === "/api/painel" && req.method === "GET") {
-    if (profile.role !== "admin") { json(res, 403, { error: "Apenas administradores podem abrir o Painel." }); return; }
-    const versao = JSON.parse(fs.readFileSync(path.join(config.publicDir, "..", "package.json"), "utf8")).version as string;
-    json(res, 200, montarPainel({
-      catalogo: catalog.list(), ultimaVarredura: lastScanAt, intervaloVarreduraMs: config.scanIntervalMs, raizMidia: config.mediaRoot,
-      atividade: store.listActivity(50), agora: new Date(), servidor: infoServidor(versao, config.ffmpegPath),
-      discos: [disco(config.mediaRoot, "Mídia"), disco(config.dataDir, "Dados do PugotiCine")]
-    }));
-    return;
-  }
   if (url.pathname === "/api/progress" && req.method === "POST") {
     const input = await body<{ mediaId?: string; position?: number; duration?: number }>(req);
     const media = catalog.get(String(input.mediaId ?? ""));
     if (!media) { json(res, 404, { error: "Mídia não encontrada." }); return; }
-    json(res, 200, { progress: store.saveProgress(profile.username, media.id, Number(input.position), Number(input.duration)) });
+    // Painel › Reprodução › Retomar: a porcentagem máxima decide quando o filme conta como assistido.
+    json(res, 200, { progress: store.saveProgress(profile.username, media.id, Number(input.position), Number(input.duration), painel.limiteConcluido()) });
     return;
   }
 
@@ -97,6 +109,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<voi
   if (playbackMatch && req.method === "POST") {
     const media = catalog.get(playbackMatch[1]);
     if (!media) { json(res, 404, { error: "Mídia não encontrada." }); return; }
+    painel.registrarReproducao(profile, media);
     const request = await body<PlaybackRequest>(req);
     const technical = probe.analyze(media);
     const plan = createPlaybackPlan(media, technical, request);
@@ -189,14 +202,21 @@ async function staticFile(req: IncomingMessage, res: ServerResponse): Promise<vo
 
 scan();
 metadata.refresh().catch((error) => console.error("Falha ao atualizar metadados:", error));
+// Painel › Tarefas Agendadas: as execuções automáticas ficam registradas como as manuais.
 const scanTimer = setInterval(() => {
-  scan();
-  metadata.refresh().catch((error) => console.error("Falha ao atualizar metadados:", error));
+  void painel.executarTarefa("varredura").then(() => painel.executarTarefa("metadados"));
 }, config.scanIntervalMs);
 const server = http.createServer(async (req, res) => {
   try {
     if (req.url === "/health") { json(res, 200, { status: "ok", media: catalog.list().length, lastScanAt }); return; }
-    if (req.url?.startsWith("/api/")) await handleApi(req, res);
+    if (req.url?.startsWith("/api/")) {
+      const inicio = Date.now();
+      await handleApi(req, res);
+      // Painel › Registros: aviso de resposta lenta (o vídeo em HLS espera o FFmpeg e fica de fora).
+      const limite = painel.respostaLenta();
+      const duracao = Date.now() - inicio;
+      if (limite !== null && duracao > limite && !/\/hls\//.test(req.url)) console.warn(`Resposta lenta: ${req.method} ${req.url.split("?")[0]} levou ${duracao} ms`);
+    }
     else await staticFile(req, res);
   } catch (error) {
     console.error(error);
