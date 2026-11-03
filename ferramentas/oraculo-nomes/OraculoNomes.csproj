@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Oráculo: roda as regras de nomes do Jellyfin 10.11.10 (Emby.Naming original, sem alteração) sobre uma lista de
+       caminhos e grava o resultado esperado que o PugotiCine (Node) precisa reproduzir. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../motor/servidor/Emby.Naming/Emby.Naming.csproj" />
+  </ItemGroup>
+</Project>

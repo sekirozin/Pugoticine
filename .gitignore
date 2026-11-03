@@ -5,3 +5,5 @@ data/
 *.log
 *.bak*
 backups/
+ferramentas/oraculo-nomes/bin/
+ferramentas/oraculo-nomes/obj/
