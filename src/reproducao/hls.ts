@@ -36,7 +36,12 @@ export function argumentosFfmpeg(o: OpcoesArgumentos): string[] {
   const audio = o.info.audioTracks.find(t => t.streamIndex === o.plano.audioStreamIndex);
   const legenda = o.info.subtitleTracks.find(t => t.streamIndex === o.plano.subtitleStreamIndex);
   const args = ["-hide_banner", "-nostdin", "-loglevel", "warning"];
-  if (o.inicioSegundos > 0) args.push("-ss", o.inicioSegundos.toFixed(6));
+  // No remux, o -ss na entrada cai no keyframe anterior ao ponto de busca, e o FFmpeg recua sozinho 3/23 s (~0,13 s)
+  // antes de buscar quando o vídeo tem quadros B (fftools/ffmpeg_demux.c, "dts_heuristic"). Pedir o tempo exato do
+  // keyframe caía no keyframe ANTERIOR e o segmento N saía com o conteúdo do N-1: o player via buraco e pulava ou
+  // travava (medido no FFmpeg 8 do container: -ss 302,084 → 291,667; -ss 303 → 302,083). 0,25 s depois do keyframe
+  // compensa o recuo e ainda fica antes do keyframe seguinte (sempre a mais de 1 s).
+  if (o.inicioSegundos > 0) args.push("-ss", (o.copiaVideo ? o.inicioSegundos + 0.25 : o.inicioSegundos).toFixed(6));
   args.push("-i", o.entrada, "-map_metadata", "-1", "-map_chapters", "-1", "-threads", String(o.ffmpegThreads ?? 0));
   if (o.copiaVideo) {
     args.push("-map", `0:${video.streamIndex}`, "-c:v", "copy");

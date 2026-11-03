@@ -2,6 +2,7 @@
 // (compose.desenvolvimento.yml) e o filme de teste de 10 min em 1080p com AC-3 5.1:
 //  - começa a tocar rápido; pular para o minuto 5 não converte o meio (o player só pede os trechos do ponto novo);
 //  - fechar e abrir de novo retoma no ponto salvo, começando a pedir trechos dali (não do início).
+//  - voltar alguns segundos depois de retomar cai no ponto pedido (não pula nem trava);
 //  - a janela do player aparece na tela (o efeito de fundo tirava o position:fixed dela).
 // Uso: node test/browser-player.mjs [pasta para capturas]. Requer `chromium` e o compose no ar.
 import assert from "node:assert/strict";
@@ -72,6 +73,17 @@ try {
   assert.ok(Math.abs(posicao - antesDeFechar) < 15, "retomou perto de onde parou");
   assert.ok(Math.min(...primeiros) >= 25, "retomada não começou pelo trecho 0");
   if (fotos) await page.screenshot({ path: path.join(fotos, "player-retomada.png") });
+
+  // 4) Voltar alguns segundos depois de retomar (o braço 3 viu travar): reinicia o FFmpeg num segmento anterior; o
+  // segmento tem de trazer o conteúdo certo (antes vinha o do anterior, por causa do arredondamento do índice do MKV).
+  await page.waitForTimeout(4000);
+  const alvo = Math.floor(posicao) - 4;
+  t0 = Date.now();
+  await page.evaluate((a) => { document.querySelector("video").currentTime = a; }, alvo);
+  const voltou = await page.waitForFunction((a) => { const v = document.querySelector("video"); return !v.seeking && !v.paused && v.currentTime >= a && v.currentTime < a + 0.8; }, alvo, { timeout: 20000 }).then(() => true, () => false);
+  const depois = await page.evaluate(() => { const v = document.querySelector("video"); return { t: v.currentTime, seeking: v.seeking, pronto: v.readyState }; });
+  console.log(`voltar para ${alvo} s: ${voltou ? `tocou em ${depois.t.toFixed(1)} s após ${Date.now() - t0} ms` : `FALHOU ${JSON.stringify(depois)}`}`);
+  assert.ok(voltou, "voltar alguns segundos cai no ponto pedido e continua tocando");
   assert.deepEqual(erros, []);
   console.log("PQA-220 ok");
 } finally {

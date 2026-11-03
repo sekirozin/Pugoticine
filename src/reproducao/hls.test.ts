@@ -14,6 +14,12 @@ import type { MediaItem, PlaybackPlan } from "../types.js";
 
 const pasta = fs.mkdtempSync(path.join(os.tmpdir(), "hls-"));
 const video = path.join(pasta, "Filme (2020).mkv");
+// Encode comum de x264 (quadros B, GOP de 250 quadros = 10,4166… s): com quadros B o FFmpeg recua ~0,13 s antes de
+// buscar e um -ss no tempo exato do keyframe caía no keyframe anterior.
+const videoGopQuebrado = path.join(pasta, "Gop (2021).mkv");
+assert.equal(spawnSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=120", "-f", "lavfi", "-i", "sine=duration=120",
+  // Com quadros B (-bf 3): é com eles que o FFmpeg recua ~0,13 s antes de buscar (dts_heuristic) e caía no keyframe anterior.
+  "-c:v", "libx264", "-preset", "veryfast", "-bf", "3", "-g", "250", "-sc_threshold", "0", "-c:a", "aac", "-shortest", videoGopQuebrado]).status, 0);
 // 3 min, keyframe a cada 2 s (como um encode comum), áudio AC-3 (o navegador não toca: vira AAC).
 assert.equal(spawnSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=24:duration=180", "-f", "lavfi", "-i", "sine=duration=180",
   "-c:v", "libx264", "-preset", "ultrafast", "-g", "48", "-c:a", "ac3", "-shortest", video]).status, 0);
@@ -80,3 +86,27 @@ for (const modo of ["remux", "transcode"] as const) {
     assert.ok(!fs.existsSync(sessao.pasta), "pasta da sessão apagada");
   });
 }
+
+test("PQA-219: remux com quadros B — reiniciar o FFmpeg num segmento anterior gera o conteúdo dele, não o do anterior", async () => {
+  const infoGop = parseProbeOutput(JSON.parse(spawnSync("ffprobe", ["-v", "error", "-show_format", "-show_streams", "-of", "json", videoGopQuebrado], { encoding: "utf8" }).stdout));
+  const st = fs.statSync(videoGopQuebrado);
+  const mediaGop = { ...media, id: "b".repeat(24), absolutePath: videoGopQuebrado, relativePath: "Gop (2021).mkv", fileName: "Gop (2021).mkv", size: st.size, modifiedAt: st.mtime.toISOString() } as MediaItem;
+  const plano: PlaybackPlan = { mode: "remux", reason: "teste", targetHeight: null, toneMap: false, audioStreamIndex: infoGop.audioTracks[0].streamIndex, subtitleStreamIndex: null, audioCopy: true };
+  const id = gerenciador.criar("mael", mediaGop, infoGop, plano);
+  const sessao = gerenciador.sessao(id, "mael", mediaGop.id)!;
+  const duracoes = [...gerenciador.playlist(sessao).matchAll(/#EXTINF:([\d.]+),/g)].map(m => Number(m[1]));
+  const inicios = duracoes.map((_, i) => duracoes.slice(0, i).reduce((a, b) => a + b, 0));
+  assert.ok(duracoes.length >= 8 && Math.abs(duracoes[1] - 10.417) < 0.01, `segmentos de ~10,417 s: ${duracoes.slice(0, 3)}`);
+  // Como o braço 3 viu: começa no meio (retomada) e depois volta (cada volta reinicia o FFmpeg num segmento anterior).
+  // O init vem depois do primeiro segmento, senão o FFmpeg começaria do 0 e geraria tudo sem reinício.
+  const ordem = [8, 7, 5];
+  const primeiro = await gerenciador.segmento(sessao, ordem[0]);
+  const init = await gerenciador.segmento(sessao, -1);
+  for (const n of ordem) {
+    const pids = sessao.trabalho!.processo.pid;
+    const seg = inicioDoSegmento(init, n === ordem[0] ? primeiro : await gerenciador.segmento(sessao, n));
+    if (n !== ordem[0]) assert.notEqual(sessao.trabalho!.processo.pid, pids, `voltar para ${n} reinicia o FFmpeg`);
+    assert.ok(Math.abs(seg.pts - inicios[n]) < 0.05, `segmento ${n} começa em ${seg.pts.toFixed(3)}, playlist ${inicios[n].toFixed(3)}`);
+  }
+  gerenciador.encerrar(id);
+});
