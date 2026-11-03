@@ -11,10 +11,11 @@ const defaults: PlaybackCapabilities = {
 function targetHeight(request: PlaybackRequest, capabilities: PlaybackCapabilities, sourceHeight: number): number | null {
   if (request.quality === "original") return null;
   if (request.quality && request.quality !== "auto") return Math.min(sourceHeight, Number(request.quality));
-  const networkLimit = capabilities.downlinkMbps > 0 && capabilities.downlinkMbps < 5 ? 480
-    : capabilities.downlinkMbps > 0 && capabilities.downlinkMbps < 10 ? 720 : 1080;
-  const target = Math.min(sourceHeight, capabilities.maxHeight || 1080, networkLimit);
-  return target < sourceHeight ? target : null;
+  // "Automático" mantém a resolução original, como o Jellyfin (que só reduz pelo limite de taxa escolhido): reduzir
+  // pelo tamanho da tela ou pela estimativa navigator.connection.downlink (o Chromium sem janela informa ~1 Mbps)
+  // obrigava a converter o vídeo à toa — o caminho mais pesado e o que mais trava.
+  void capabilities;
+  return null;
 }
 
 export function createPlaybackPlan(media: MediaItem, info: MediaTechnicalInfo, request: PlaybackRequest): PlaybackPlan {

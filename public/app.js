@@ -263,6 +263,7 @@ function attachSource(url, mode) {
     state.hls.on(Hls.Events.MANIFEST_PARSED, startPlayback);
     let recuperacoesDeMidia = 0;
     state.hls.on(Hls.Events.ERROR, (_event, data) => {
+      console.error(`HLS: ${data.type} ${data.details || ""}${data.fatal ? " (fatal)" : ""}${data.error ? ` — ${data.error.message || data.error}` : ""}`);
       if (data.type === Hls.ErrorTypes.NETWORK_ERROR && data.response?.code >= 400) { fallbackUniversal(`servidor respondeu ${data.response.code}`); return; }
       if (!data.fatal) return;
       if (data.type === Hls.ErrorTypes.NETWORK_ERROR) { state.hls.startLoad(); return; }

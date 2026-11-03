@@ -63,7 +63,9 @@ export function argumentosFfmpeg(o: OpcoesArgumentos): string[] {
   else args.push("-an");
   args.push("-copyts", "-avoid_negative_ts", "disabled", "-max_muxing_queue_size", "2048",
     "-f", "hls", "-max_delay", "5000000", "-hls_time", String(SEGUNDOS_POR_SEGMENTO),
-    "-hls_segment_type", "fmp4", "-hls_fmp4_init_filename", "init.mp4", "-start_number", String(o.segmento),
+    // Init próprio de cada FFmpeg: o arquivo só fica completo quando o primeiro segmento fecha, e um reinício não
+    // pode sobrescrever o init que o player já está lendo (ver GerenciadorHls.segmento).
+    "-hls_segment_type", "fmp4", "-hls_fmp4_init_filename", `init-${o.segmento}.mp4`, "-start_number", String(o.segmento),
     "-hls_segment_filename", path.join(o.pasta, "%d.mp4"), "-hls_playlist_type", "vod", "-hls_list_size", "0",
     "-hls_flags", "temp_file", "-hls_segment_options", "movflags=+frag_discont", "-y", path.join(o.pasta, "ffmpeg.m3u8"));
   return args;
@@ -111,6 +113,30 @@ export class GerenciadorHls {
     if (numero < -1 || numero >= s.duracoes.length) throw new Error("Segmento inexistente.");
     const arquivo = path.join(s.pasta, numero === -1 ? "init.mp4" : `${numero}.mp4`);
     if (fs.existsSync(arquivo)) return arquivo;
+    if (numero === -1) {
+      // O init só é entregue completo: depois que o primeiro segmento de um FFmpeg fechou, o init dele é copiado
+      // (cópia + rename) para init.mp4. Todos os FFmpeg da sessão usam os mesmos parâmetros, então o init é o mesmo.
+      const decisao = s.fila.then(() => { if (!s.trabalho) this.garantirTrabalho(s, 0, true); });
+      s.fila = decisao.catch(() => undefined);
+      await decisao;
+      const limite = Date.now() + ESPERA_MAXIMA_MS;
+      while (Date.now() < limite) {
+        if (fs.existsSync(arquivo)) return arquivo;
+        const t = s.trabalho;
+        if (t) {
+          while (fs.existsSync(path.join(s.pasta, `${t.proximo}.mp4`))) t.proximo++;
+          const initDoTrabalho = path.join(s.pasta, `init-${t.inicio}.mp4`);
+          if ((t.proximo > t.inicio || t.terminou) && fs.existsSync(initDoTrabalho)) {
+            fs.copyFileSync(initDoTrabalho, `${arquivo}.copia`);
+            fs.renameSync(`${arquivo}.copia`, arquivo);
+            return arquivo;
+          }
+          if (t.terminou) throw new Error(`O FFmpeg terminou sem gerar o init (código ${t.codigo}). ${t.diagnostico.slice(-400)}`);
+        }
+        await new Promise(r => setTimeout(r, 100));
+      }
+      throw new Error("Tempo esgotado esperando o init.");
+    }
     // Decisão serializada por sessão (o LockAsync do Jellyfin).
     const decisao = s.fila.then(() => this.garantirTrabalho(s, numero === -1 ? 0 : numero, numero === -1));
     s.fila = decisao.catch(() => undefined);

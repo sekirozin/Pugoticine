@@ -1,7 +1,9 @@
 (() => {
   if (document.querySelector('#pugotilab-ambient')) return;
   const style = document.createElement('style');
-  style.textContent = '#pugotilab-ambient{position:fixed;inset:0;z-index:0;width:100%;height:100%;pointer-events:none;opacity:.78}body>*:not(#pugotilab-ambient):not(script):not(style):not(link){position:relative;z-index:1}@media(prefers-reduced-motion:reduce){#pugotilab-ambient{opacity:.55}}';
+  // :where() deixa a regra com peso zero: só vale para quem não define a própria posição. Antes o ID dentro do :not()
+  // vencia as classes do app e tirava o position:fixed do player, da barra superior e dos menus.
+  style.textContent = '#pugotilab-ambient{position:fixed;inset:0;z-index:0;width:100%;height:100%;pointer-events:none;opacity:.78}:where(body>*:not(#pugotilab-ambient):not(script):not(style):not(link)){position:relative;z-index:1}@media(prefers-reduced-motion:reduce){#pugotilab-ambient{opacity:.55}}';
   document.head.append(style);
   const canvas = document.createElement('canvas');
   canvas.id = 'pugotilab-ambient';
