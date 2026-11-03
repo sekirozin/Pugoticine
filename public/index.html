@@ -47,17 +47,51 @@
     <button id="profile-logout">Sair</button>
   </div>
 
+  <!-- Player em tela cheia no estilo do Jellyfin (controllers/playback/video): barra superior, progresso e controles
+       que somem depois de 3 s parado. A interface fica em player-osd.js; os seletores escondidos guardam as escolhas
+       de qualidade, áudio e legenda que o app.js usa para pedir a reprodução. -->
   <div class="player-modal" id="player-modal" hidden>
-    <div class="player-shell">
-      <div class="player-heading"><div><h2 id="player-title"></h2><p id="player-meta"></p></div><button class="icon-button" id="player-close" aria-label="Fechar"><svg viewBox="0 0 24 24"><path d="m5 5 14 14M19 5 5 19"/></svg></button></div>
-      <div class="player-controls">
-        <label><span>Qualidade</span><select id="player-quality"><option value="auto">Automática</option><option value="original">Original</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option></select></label>
-        <label><span>Áudio</span><select id="player-audio"><option>Analisando...</option></select></label>
-        <label><span>Legenda</span><select id="player-subtitle"><option value="none">Desativada</option></select></label>
-        <span class="player-mode" id="player-mode">Analisando</span>
+    <video id="player" playsinline preload="metadata"></video>
+    <div class="osd" id="player-osd">
+      <div class="osd-topo">
+        <button class="osd-botao" id="player-close" type="button" title="Voltar (Esc)" aria-label="Voltar"><svg class="osd-icone" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+        <div class="osd-titulo"><h2 id="player-title"></h2><p id="player-meta"></p></div>
+        <div class="osd-acoes-topo" id="player-acoes-topo"></div>
       </div>
-      <video id="player" controls playsinline preload="metadata"></video>
-      <p class="player-status" id="player-status"></p>
+      <div class="osd-centro"><p class="osd-status" id="player-status" role="status" aria-live="polite"></p></div>
+      <div class="osd-base">
+        <div class="osd-progresso">
+          <span class="osd-tempo" id="osd-atual">0:00</span>
+          <div class="osd-barra">
+            <div class="osd-buffer" id="osd-buffer"></div>
+            <input type="range" id="osd-posicao" min="0" max="1000" step="0.1" value="0" aria-label="Posição">
+            <span class="osd-dica" id="osd-dica" hidden></span>
+          </div>
+          <span class="osd-tempo" id="osd-restante">-0:00</span>
+        </div>
+        <div class="osd-botoes">
+          <button class="osd-botao" id="osd-voltar" type="button" title="Voltar 10 s (J)" aria-label="Voltar 10 segundos"><svg class="osd-icone" viewBox="0 0 24 24"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/></svg></button>
+          <button class="osd-botao" id="osd-play" type="button" title="Reproduzir (K)" aria-label="Reproduzir"><svg class="osd-icone" viewBox="0 0 24 24"><path id="osd-play-icone" d="M8 5v14l11-7z"/></svg></button>
+          <button class="osd-botao" id="osd-avancar" type="button" title="Avançar 30 s (L)" aria-label="Avançar 30 segundos"><svg class="osd-icone" viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg></button>
+          <span class="osd-termina" id="osd-termina"></span>
+          <span class="osd-espaco"></span>
+          <button class="osd-botao" id="osd-legendas" type="button" title="Legendas" aria-label="Legendas"><svg class="osd-icone" viewBox="0 0 24 24"><path d="M19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z"/></svg></button>
+          <button class="osd-botao" id="osd-audio" type="button" title="Áudio" aria-label="Áudio"><svg class="osd-icone" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></button>
+          <button class="osd-botao" id="osd-mudo" type="button" title="Mudo (M)" aria-label="Mudo"><svg class="osd-icone" viewBox="0 0 24 24"><path id="osd-volume-icone" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg></button>
+          <input class="osd-volume" type="range" id="osd-volume" min="0" max="100" step="1" value="100" aria-label="Volume">
+          <button class="osd-botao" id="osd-config" type="button" title="Configurações" aria-label="Configurações"><svg class="osd-icone" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg></button>
+          <button class="osd-botao" id="osd-pip" type="button" title="Vídeo destacado (picture-in-picture)" aria-label="Vídeo destacado" hidden><svg class="osd-icone" viewBox="0 0 24 24"><path d="M19 11h-8v6h8v-6zm4 8V4.98C23 3.88 22.1 3 21 3H3c-1.1 0-2 .88-2 1.98V19c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2zm-2 .02H3V4.97h18v14.05z"/></svg></button>
+          <button class="osd-botao" id="osd-tela-cheia" type="button" title="Tela cheia (F)" aria-label="Tela cheia"><svg class="osd-icone" viewBox="0 0 24 24"><path id="osd-tela-cheia-icone" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg></button>
+        </div>
+      </div>
+      <div class="osd-menu" id="osd-menu" role="menu" hidden></div>
+      <div class="osd-info" id="osd-info" hidden></div>
+    </div>
+    <div class="osd-escolhas" hidden>
+      <select id="player-quality"><option value="auto">Automática</option><option value="original">Original</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option></select>
+      <select id="player-audio"><option>Analisando...</option></select>
+      <select id="player-subtitle"><option value="none">Desativada</option></select>
+      <span id="player-mode">Analisando</span>
     </div>
   </div>
   <div class="toast" id="toast" hidden></div>

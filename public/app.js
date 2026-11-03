@@ -1,4 +1,5 @@
 import { renderPainel } from "/painel.js";
+import { abrirOsd, definirDuracao, definirFonteDeInfo, fecharOsd } from "/player-osd.js";
 
 const state = {
   profile: null,
@@ -241,6 +242,23 @@ function addSelectedTextTrack(media, technical) {
     track.default = true;
     player.append(track);
   }
+  // Faixa adicionada com o vídeo já carregado não liga sozinha pelo "default": liga aqui.
+  const adicionada = player.querySelector("track:last-of-type");
+  if (adicionada) adicionada.track.mode = "showing";
+}
+
+// Troca de legenda como no Jellyfin: legenda de texto (externa ou interna) entra e sai sem recarregar o vídeo; só a
+// legenda em imagem (PGS/VobSub), que precisa ser desenhada no vídeo pelo servidor, recarrega a reprodução.
+async function trocarLegenda() {
+  const tecnico = state.technical;
+  const valor = $("#player-subtitle").value;
+  const queimada = (v) => String(v).startsWith("embedded:") && tecnico?.subtitleTracks.find((t) => t.streamIndex === Number(String(v).slice(9)))?.kind === "bitmap";
+  const anterior = state.legendaAtual ?? "none";
+  state.legendaAtual = valor;
+  if (queimada(valor) || queimada(anterior)) { await reloadPlayback(); return; }
+  player.querySelectorAll("track").forEach((track) => track.remove());
+  for (const faixa of player.textTracks) faixa.mode = "disabled";
+  if (state.active && tecnico) addSelectedTextTrack(state.active, tecnico);
 }
 
 async function saveProgress() {
@@ -319,7 +337,10 @@ async function requestPlayback(forceUniversal = false) {
   };
   const result = await api(`/api/media/${media.id}/playback`, { method: "POST", body: JSON.stringify(request) });
   state.technical = result.technical;
+  state.plan = result.plan;
+  definirDuracao(result.technical.duration);
   populateTrackControls(media, result.technical);
+  state.legendaAtual = $("#player-subtitle").value;
   addSelectedTextTrack(media, result.technical);
   const labels = { direct: "Direct Play", remux: "Remux", transcode: "Transcodificação" };
   $("#player-mode").textContent = `${labels[result.plan.mode]} · ${result.plan.reason}`;
@@ -350,10 +371,11 @@ async function openPlayer(id) {
   $("#player-audio").innerHTML = `<option>Analisando...</option>`;
   $("#player-subtitle").innerHTML = `<option>Desativada</option>`;
   const metadata = media.metadata || {};
-  $("#player-title").textContent = media.title;
-  $("#player-meta").textContent = [media.year, metadata.runtime ? `${metadata.runtime} min` : "", metadata.audienceScore ? `Público ${metadata.audienceScore}%` : "", metadata.criticScore ? `Crítica ${metadata.criticScore}%` : ""].filter(Boolean).join(" · ");
+  $("#player-title").textContent = media.year ? `${media.title} (${media.year})` : media.title;
+  $("#player-meta").textContent = [metadata.runtime ? `${metadata.runtime} min` : "", metadata.audienceScore ? `Público ${metadata.audienceScore}%` : "", metadata.criticScore ? `Crítica ${metadata.criticScore}%` : ""].filter(Boolean).join(" · ");
   $("#player-mode").textContent = "Analisando";
   $("#player-modal").hidden = false;
+  abrirOsd({ duracao: metadata.runtime ? metadata.runtime * 60 : 0 });
   document.body.style.overflow = "hidden";
   state.saveTimer = setInterval(saveProgress, 15000);
   requestPlayback().catch((error) => { $("#player-status").textContent = error.message; });
@@ -378,6 +400,7 @@ async function closePlayer() {
   state.active = null;
   state.technical = null;
   state.usingHls = false;
+  await fecharOsd();
   $("#player-modal").hidden = true;
   document.body.style.overflow = "";
   if (usedHls) fetch(`/api/media/${previous.id}/hls`, { method: "DELETE", keepalive: true }).catch(() => {});
@@ -424,10 +447,20 @@ $("#profile-open")?.addEventListener("click", (event) => { event.preventDefault(
 $("#logout").addEventListener("click", logout);
 $("#profile-logout").addEventListener("click", logout);
 $("#player-close").addEventListener("click", closePlayer);
-$("#player-modal").addEventListener("click", (event) => { if (event.target === $("#player-modal")) closePlayer(); });
 $("#player-quality").addEventListener("change", reloadPlayback);
 $("#player-audio").addEventListener("change", reloadPlayback);
-$("#player-subtitle").addEventListener("change", reloadPlayback);
+$("#player-subtitle").addEventListener("change", () => trocarLegenda().catch((error) => { $("#player-status").textContent = error.message; }));
+// "Informações de reprodução" (menu de configurações do player).
+definirFonteDeInfo(() => {
+  const tecnico = state.technical, video = tecnico?.video;
+  const audio = tecnico?.audioTracks.find((faixa) => faixa.streamIndex === state.plan?.audioStreamIndex);
+  return [
+    ["Modo", $("#player-mode").textContent],
+    ["Arquivo", tecnico ? `${tecnico.container} · ${Math.round((tecnico.bitrate || 0) / 1000)} kbps` : "—"],
+    ["Vídeo", video ? `${video.codec.toUpperCase()} ${video.width}×${video.height}${video.hdr ? " HDR" : ""}` : "—"],
+    ["Áudio", audio ? `${audio.codec.toUpperCase()} ${audio.channels || 2} canais${state.plan?.audioCopy ? "" : " → AAC estéreo"}` : "—"]
+  ];
+});
 $("#scan-button").addEventListener("click", async () => {
   try {
     toast("Atualizando catálogo...");

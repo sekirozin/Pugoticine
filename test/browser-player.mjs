@@ -58,6 +58,8 @@ try {
   const antesDeFechar = await tempo();
 
   // 3) Fechar (salva a posição) e abrir de novo: retoma ali.
+  await page.mouse.move(700, 400); // os controles somem 3 s depois de começar a tocar; mexer o mouse traz de volta
+  await page.mouse.move(720, 420);
   await page.locator("#player-close").click();
   await page.waitForTimeout(800);
   pedidos.length = 0;
