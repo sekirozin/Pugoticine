@@ -401,6 +401,7 @@ async function bootstrap() {
     $("#scan-button").hidden = data.profile.role !== "admin";
     $("#painel-button").hidden = data.profile.role !== "admin";
     render();
+    window.dispatchEvent(new CustomEvent("pugoticine:pronto"));
     const requestedMedia = new URLSearchParams(location.search).get("play");
     if (requestedMedia && state.media.some((item) => item.id === requestedMedia)) {
       history.replaceState(null, "", location.pathname);
@@ -442,5 +443,14 @@ addEventListener("beforeunload", () => {
     mediaId: state.active.id, position: player.currentTime, duration: state.technical.duration
   })], { type: "application/json" }));
 });
+
+// Ganchos para módulos externos (salas sincronizadas em salas.js): abrir/fechar o player e ler o catálogo.
+window.pugoticine = {
+  abrirPlayer: (id) => openPlayer(id),
+  fecharPlayer: () => closePlayer(),
+  midias: () => state.media,
+  perfil: () => state.profile,
+  midiaAberta: () => state.active?.id ?? null
+};
 
 bootstrap();

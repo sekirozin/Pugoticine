@@ -1,0 +1,27 @@
+/* Salas de filme sincronizadas (salas.js). */
+body>#salas-painel.salas-painel,.salas-painel{position:fixed;z-index:90;inset:0;background:rgba(0,0,0,.82);display:grid;place-items:start center;padding:calc(var(--topbar) + 20px) 16px 24px;overflow:auto}
+body>#salas-painel.salas-painel[hidden],.salas-painel[hidden]{display:none}
+.salas-caixa{width:min(860px,100%);background:#0a0a0a;border:1px solid var(--border);border-radius:14px;padding:22px;display:grid;gap:14px}
+.salas-caixa h2,.salas-caixa h3,.salas-caixa h4{margin:0}
+.sala-cabecalho{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.sala-cabecalho p{margin:4px 0 0;color:var(--muted)}
+.sala-criar{display:grid;gap:10px;padding:16px;border:1px solid var(--border);border-radius:12px;background:#0d0d0d}
+.salas-caixa input,.salas-caixa select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#050505;color:var(--text)}
+.salas-caixa label{display:grid;gap:6px;color:var(--muted)}
+.sala-linha{display:flex;gap:10px}.sala-linha>*{flex:1}
+.sala-botao{padding:10px 16px;border:0;border-radius:8px;background:var(--primary);color:#fff;font-weight:700;cursor:pointer}
+.sala-botao:hover{background:var(--primary-hover)}.sala-botao:disabled{opacity:.45;cursor:default}
+.sala-botao.secundario{background:#1a1a1a;border:1px solid var(--border)}.sala-botao.perigo{background:#7f1d1d;justify-self:start}
+.sala-lista{display:grid;gap:10px}
+.sala-cartao{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--border);border-radius:12px;background:#0d0d0d}
+.sala-cartao>div{flex:1;display:grid;gap:4px}.sala-cartao small{color:var(--muted)}.sala-cartao input{width:160px}
+.sala-tipo{display:inline-block;margin-right:6px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;background:#1a1f3d;color:#a9b6ff}
+.sala-tipo-senha{background:#3b2a0b;color:#ffcf7a}.sala-tipo-privada{background:#2d0f2f;color:#f0a4f5}
+.sala-atual{display:grid;gap:12px}
+.sala-pessoas{display:flex;flex-wrap:wrap;gap:6px}
+.sala-pessoa{padding:4px 10px;border-radius:99px;background:#11152c;color:#cdd4ff;font-size:13px}
+.sala-pessoa.carregando{background:#3b2a0b;color:#ffcf7a}
+.sala-ajuda{margin:0;color:var(--muted);font-size:13px}.sala-ajuda input{margin-top:6px}
+.sala-barra{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:10px;padding:8px 12px;border:1px solid #2a3470;border-radius:10px;background:#0b1029;font-size:14px}
+.sala-estado{color:var(--muted)}
+@media(max-width:700px){.sala-linha,.sala-cartao{flex-direction:column;align-items:stretch}.sala-cartao input{width:100%}}
