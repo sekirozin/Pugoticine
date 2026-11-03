@@ -1,5 +1,8 @@
 import type { MediaItem, MediaTechnicalInfo, PlaybackCapabilities, PlaybackPlan, PlaybackRequest } from "./types.js";
 
+// Áudios que o FFmpeg copia para fMP4 sem flag experimental (o FLAC em MP4 ainda é experimental).
+const AUDIO_COPIAVEL_FMP4 = new Set(["aac", "mp3", "ac3", "eac3", "opus"]);
+
 const defaults: PlaybackCapabilities = {
   videoCodecs: ["h264"], audioCodecs: ["aac", "mp3"], supportsHls: true,
   supportsHdr: false, maxHeight: 1080, downlinkMbps: 20
@@ -31,14 +34,14 @@ export function createPlaybackPlan(media: MediaItem, info: MediaTechnicalInfo, r
 
   if (directContainer && videoSupported && audioSupported && !height && !toneMap && !selectingTracks) {
     return { mode: "direct", reason: "contêiner e codecs compatíveis", targetHeight: null, toneMap: false,
-      audioStreamIndex: selectedAudio?.streamIndex ?? null, subtitleStreamIndex: null };
+      audioStreamIndex: selectedAudio?.streamIndex ?? null, subtitleStreamIndex: null, audioCopy: true };
   }
   if (videoSupported && !height && !toneMap && selectedSubtitle?.kind !== "bitmap") {
     return { mode: "remux", reason: audioSupported ? "ajuste de contêiner" : "conversão de áudio",
       targetHeight: null, toneMap: false, audioStreamIndex: selectedAudio?.streamIndex ?? null,
-      subtitleStreamIndex: selectedSubtitle?.streamIndex ?? null };
+      subtitleStreamIndex: selectedSubtitle?.streamIndex ?? null, audioCopy: audioSupported && AUDIO_COPIAVEL_FMP4.has(selectedAudio?.codec ?? "") };
   }
   return { mode: "transcode", reason: toneMap ? "conversão HDR para SDR" : height ? "ajuste de qualidade" : "codec incompatível",
     targetHeight: height, toneMap, audioStreamIndex: selectedAudio?.streamIndex ?? null,
-    subtitleStreamIndex: selectedSubtitle?.streamIndex ?? null };
+    subtitleStreamIndex: selectedSubtitle?.streamIndex ?? null, audioCopy: audioSupported && AUDIO_COPIAVEL_FMP4.has(selectedAudio?.codec ?? "") };
 }

@@ -1,0 +1,82 @@
+// PQA-219: HLS sob demanda como o Jellyfin, com FFmpeg real. Cada segmento começa exatamente onde a playlist diz
+// (remux alinhado aos keyframes, transcode em pedaços iguais); um salto para frente reinicia o FFmpeg no segmento
+// pedido (não espera a conversão chegar lá); o segmento seguinte sai do mesmo processo; a sessão é apagada no fim.
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+import { GerenciadorHls, SEGUNDOS_POR_SEGMENTO } from "./hls.js";
+import { CacheKeyframes } from "./keyframes.js";
+import { parseProbeOutput } from "../probe.js";
+import type { MediaItem, PlaybackPlan } from "../types.js";
+
+const pasta = fs.mkdtempSync(path.join(os.tmpdir(), "hls-"));
+const video = path.join(pasta, "Filme (2020).mkv");
+// 3 min, keyframe a cada 2 s (como um encode comum), áudio AC-3 (o navegador não toca: vira AAC).
+assert.equal(spawnSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=24:duration=180", "-f", "lavfi", "-i", "sine=duration=180",
+  "-c:v", "libx264", "-preset", "ultrafast", "-g", "48", "-c:a", "ac3", "-shortest", video]).status, 0);
+const info = parseProbeOutput(JSON.parse(spawnSync("ffprobe", ["-v", "error", "-show_format", "-show_streams", "-of", "json", video], { encoding: "utf8" }).stdout));
+const stat = fs.statSync(video);
+const media = { id: "a".repeat(24), title: "Filme", year: 2020, relativePath: "Filme (2020).mkv", absolutePath: video, fileName: "Filme (2020).mkv", extension: ".mkv", size: stat.size, modifiedAt: stat.mtime.toISOString(), playbackMode: "hls", subtitles: [] } as unknown as MediaItem;
+const gerenciador = new GerenciadorHls(path.join(pasta, "hls"), new CacheKeyframes(path.join(pasta, "keyframes.json")));
+test.after(() => { gerenciador.parar(); fs.rmSync(pasta, { recursive: true, force: true }); });
+
+/** Primeiro instante de vídeo do segmento (init + segmento, como o player junta). */
+function inicioDoSegmento(init: string, segmento: string): { pts: number; duracao: number } {
+  const junto = path.join(pasta, "junto.mp4");
+  fs.writeFileSync(junto, Buffer.concat([fs.readFileSync(init), fs.readFileSync(segmento)]));
+  const r = spawnSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "packet=pts_time,duration_time", "-of", "csv=p=0", junto], { encoding: "utf8" });
+  const pts = r.stdout.trim().split("\n").map(l => l.split(",").map(Number));
+  const inicio = Math.min(...pts.map(p => p[0]));
+  const fim = Math.max(...pts.map(p => p[0] + p[1]));
+  return { pts: inicio, duracao: fim - inicio };
+}
+
+for (const modo of ["remux", "transcode"] as const) {
+  test(`PQA-219: ${modo} — segmentos alinhados à playlist, salto reinicia o FFmpeg no ponto pedido`, async () => {
+    const plano: PlaybackPlan = { mode: modo, reason: "teste", targetHeight: null, toneMap: false, audioStreamIndex: info.audioTracks[0].streamIndex, subtitleStreamIndex: null, audioCopy: false };
+    const id = gerenciador.criar("marcos", media, info, plano);
+    const sessao = gerenciador.sessao(id, "marcos", media.id)!;
+    const playlist = gerenciador.playlist(sessao);
+    const duracoes = [...playlist.matchAll(/#EXTINF:([\d.]+),/g)].map(m => Number(m[1]));
+    assert.ok(Math.abs(duracoes.reduce((a, b) => a + b, 0) - 180) < 0.2, "playlist cobre o filme inteiro desde o início");
+    assert.match(playlist, /#EXT-X-ENDLIST/);
+    const inicios = duracoes.map((_, i) => duracoes.slice(0, i).reduce((a, b) => a + b, 0));
+
+    const init = await gerenciador.segmento(sessao, -1);
+    const s0 = await gerenciador.segmento(sessao, 0);
+    const primeiro = inicioDoSegmento(init, s0);
+    assert.ok(Math.abs(primeiro.pts - inicios[0]) < 0.05, `segmento 0 começa em ${primeiro.pts}`);
+    assert.ok(Math.abs(primeiro.duracao - duracoes[0]) < 0.1, `segmento 0 dura ${primeiro.duracao} (playlist ${duracoes[0]})`);
+    const processoInicial = sessao.trabalho!.processo.pid;
+
+    // Salto para ~2 min: muito além do FFmpeg atual → reinicia ali, sem converter o meio.
+    const alvo = duracoes.findIndex((_, i) => inicios[i] >= 120);
+    const antes = Date.now();
+    const sAlvo = await gerenciador.segmento(sessao, alvo);
+    const espera = Date.now() - antes;
+    assert.notEqual(sessao.trabalho!.processo.pid, processoInicial, "FFmpeg reiniciado no salto");
+    assert.equal(sessao.trabalho!.inicio, alvo);
+    const depoisDoSalto = inicioDoSegmento(init, sAlvo);
+    assert.ok(Math.abs(depoisDoSalto.pts - inicios[alvo]) < 0.05, `segmento ${alvo} começa em ${depoisDoSalto.pts}, playlist ${inicios[alvo]}`);
+    assert.ok(Math.abs(depoisDoSalto.duracao - duracoes[alvo]) < 0.1, `segmento ${alvo} dura ${depoisDoSalto.duracao}`);
+    assert.ok(!fs.existsSync(path.join(sessao.pasta, `${Math.floor(alvo / 2)}.mp4`)), "o meio do filme não foi convertido");
+    console.log(`${modo}: ${duracoes.length} segmentos; salto para ${inicios[alvo].toFixed(1)} s respondeu em ${espera} ms`);
+
+    // O seguinte vem do mesmo FFmpeg.
+    const pidSalto = sessao.trabalho!.processo.pid;
+    const seguinte = inicioDoSegmento(init, await gerenciador.segmento(sessao, alvo + 1));
+    assert.equal(sessao.trabalho!.processo.pid, pidSalto, "sem reiniciar no segmento seguinte");
+    assert.ok(Math.abs(seguinte.pts - inicios[alvo + 1]) < 0.05);
+
+    // Voltar para trás (já gerado: serve na hora; não gerado: reinicia).
+    assert.equal(await gerenciador.segmento(sessao, 0), s0);
+    const s3 = await gerenciador.segmento(sessao, 3);
+    assert.ok(Math.abs(inicioDoSegmento(init, s3).pts - inicios[3]) < 0.05);
+
+    gerenciador.encerrar(id);
+    assert.ok(!fs.existsSync(sessao.pasta), "pasta da sessão apagada");
+  });
+}

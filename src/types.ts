@@ -117,4 +117,6 @@ export type PlaybackPlan = {
   toneMap: boolean;
   audioStreamIndex: number | null;
   subtitleStreamIndex: number | null;
+  /** Áudio copiado sem recodificar (o navegador declara o codec); senão AAC estéreo. */
+  audioCopy: boolean;
 };

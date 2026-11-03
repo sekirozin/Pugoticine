@@ -12,6 +12,8 @@ import { createPlaybackPlan } from "./playback.js";
 import { ProbeService } from "./probe.js";
 import { Store } from "./store.js";
 import { Transcoder } from "./transcoder.js";
+import { GerenciadorHls } from "./reproducao/hls.js";
+import { CacheKeyframes } from "./reproducao/keyframes.js";
 import type { PlaybackPlan, PlaybackRequest, PugotiProfile } from "./types.js";
 
 fs.mkdirSync(config.dataDir, { recursive: true });
@@ -20,7 +22,8 @@ const store = new Store(config.dbFile);
 const metadata = new MetadataCatalog();
 const probe = new ProbeService(path.join(config.dataDir, "probe-cache.json"));
 const transcoder = new Transcoder(path.join(config.dataDir, "transcodes"));
-const playbackPlans = new Map<string, { userId: string; mediaId: string; plan: PlaybackPlan; createdAt: number }>();
+fs.mkdirSync(config.dataDir, { recursive: true });
+const hls = new GerenciadorHls(path.join(config.dataDir, "hls"), new CacheKeyframes(path.join(config.dataDir, "keyframes.json")), config.ffmpegPath);
 let lastScanAt = "";
 
 function scan(): void {
@@ -85,9 +88,9 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<voi
       json(res, 200, { plan, technical, url: `/api/media/${media.id}/stream` });
       return;
     }
-    const sessionId = crypto.randomUUID();
-    playbackPlans.set(sessionId, { userId: profile.username, mediaId: media.id, plan, createdAt: Date.now() });
-    json(res, 200, { plan, technical, url: `/api/media/${media.id}/hls/index.m3u8?session=${sessionId}` });
+    // HLS sob demanda (como o Jellyfin): playlist completa, segmentos gerados quando pedidos.
+    const sessao = hls.criar(profile.username, media, technical, plan);
+    json(res, 200, { plan, technical, url: `/api/media/${media.id}/hls/${sessao}/main.m3u8` });
     return;
   }
 
@@ -121,35 +124,27 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<voi
     res.once("close", () => { if (process.exitCode === null) process.kill("SIGTERM"); });
     return;
   }
-  const playlistMatch = url.pathname.match(/^\/api\/media\/([a-f0-9]{24})\/hls\/index\.m3u8$/);
-  if (playlistMatch && req.method === "GET") {
-    const media = catalog.get(playlistMatch[1]);
-    if (!media) { json(res, 404, { error: "Mídia não encontrada." }); return; }
-    const sessionId = url.searchParams.get("session") ?? "";
-    const session = playbackPlans.get(sessionId);
-    if (!session || session.userId !== profile.username || session.mediaId !== media.id || Date.now() - session.createdAt > 60 * 60 * 1000) {
-      json(res, 403, { error: "Sessão de reprodução inválida ou expirada." }); return;
+  const hlsMatch = url.pathname.match(/^\/api\/media\/([a-f0-9]{24})\/hls\/([0-9a-f-]{36})\/(main\.m3u8|init\.mp4|\d{1,6}\.mp4)$/);
+  if (hlsMatch && req.method === "GET") {
+    const sessao = hls.sessao(hlsMatch[2], profile.username, hlsMatch[1]);
+    if (!sessao) { json(res, 403, { error: "Sessão de reprodução inválida ou expirada." }); return; }
+    if (hlsMatch[3] === "main.m3u8") {
+      res.writeHead(200, { "content-type": "application/vnd.apple.mpegurl", "cache-control": "no-store" });
+      res.end(hls.playlist(sessao));
+      return;
     }
-    const playlist = await transcoder.playlist(profile.username, media, probe.analyze(media), session.plan);
-    res.writeHead(200, { "content-type": "application/vnd.apple.mpegurl", "cache-control": "no-store" });
-    fs.createReadStream(playlist).pipe(res);
+    const numero = hlsMatch[3] === "init.mp4" ? -1 : Number(hlsMatch[3].slice(0, -4));
+    const arquivo = await hls.segmento(sessao, numero);
+    const tamanho = fs.statSync(arquivo).size;
+    res.writeHead(200, { "content-type": "video/mp4", "content-length": tamanho, "cache-control": "private, no-store" });
+    fs.createReadStream(arquivo).pipe(res);
     return;
   }
   const stopHlsMatch = url.pathname.match(/^\/api\/media\/([a-f0-9]{24})\/hls$/);
   if (stopHlsMatch && req.method === "DELETE") {
+    hls.encerrarDoUsuario(profile.username, stopHlsMatch[1]);
     transcoder.stopSession(profile.username, stopHlsMatch[1]);
-    for (const [id, session] of playbackPlans) {
-      if (session.userId === profile.username && session.mediaId === stopHlsMatch[1]) playbackPlans.delete(id);
-    }
     json(res, 200, { stopped: true });
-    return;
-  }
-  const segmentMatch = url.pathname.match(/^\/api\/media\/([a-f0-9]{24})\/hls\/(segment-\d{5}\.ts)$/);
-  if (segmentMatch && req.method === "GET") {
-    const file = transcoder.segment(profile.username, segmentMatch[1], segmentMatch[2]);
-    if (!file) { json(res, 404, { error: "Segmento ainda não disponível." }); return; }
-    res.writeHead(200, { "content-type": "video/mp2t", "cache-control": "private, max-age=86400" });
-    fs.createReadStream(file).pipe(res);
     return;
   }
   json(res, 404, { error: "Rota não encontrada." });
@@ -181,9 +176,6 @@ metadata.refresh().catch((error) => console.error("Falha ao atualizar metadados:
 const scanTimer = setInterval(() => {
   scan();
   metadata.refresh().catch((error) => console.error("Falha ao atualizar metadados:", error));
-  for (const [id, session] of playbackPlans) {
-    if (Date.now() - session.createdAt > 60 * 60 * 1000) playbackPlans.delete(id);
-  }
 }, config.scanIntervalMs);
 const server = http.createServer(async (req, res) => {
   try {
@@ -199,6 +191,7 @@ const server = http.createServer(async (req, res) => {
 function shutdown(): void {
   clearInterval(scanTimer);
   transcoder.stop();
+  hls.parar();
   server.close(() => process.exit(0));
 }
 process.on("SIGINT", shutdown);

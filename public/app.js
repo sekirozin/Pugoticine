@@ -133,9 +133,15 @@ function browserCapabilities(forceUniversal = false) {
   if (!forceUniversal && (window.MediaSource?.isTypeSupported?.('video/mp4; codecs="hvc1.1.6.L93.B0"') || player.canPlayType('video/mp4; codecs="hvc1"'))) videoCodecs.push("hevc");
   if (!forceUniversal && window.MediaSource?.isTypeSupported?.('video/mp4; codecs="av01.0.08M.08"')) videoCodecs.push("av1");
   if (!forceUniversal && window.MediaSource?.isTypeSupported?.('video/webm; codecs="vp9"')) videoCodecs.push("vp9");
-  const audioCodecs = ["aac", "mp3"];
-  if (!forceUniversal && player.canPlayType('audio/webm; codecs="opus"')) audioCodecs.push("opus");
-  if (!forceUniversal && player.canPlayType('audio/mp4; codecs="ac-3"')) audioCodecs.push("ac3");
+  // Áudio no HLS em fMP4 passa pelo MediaSource (hls.js): é ele que diz o que toca, como no jellyfin-web.
+  const mse = (tipo) => Boolean(window.MediaSource?.isTypeSupported?.(tipo));
+  const audioCodecs = ["aac"];
+  if (forceUniversal) return { videoCodecs, audioCodecs, supportsHls: true, supportsHdr: false, maxHeight: 1080, downlinkMbps: 20 };
+  if (mse('audio/mp4; codecs="mp3"') || mse("audio/mpeg")) audioCodecs.push("mp3");
+  if (mse('audio/mp4; codecs="opus"')) audioCodecs.push("opus");
+  if (mse('audio/mp4; codecs="ac-3"')) audioCodecs.push("ac3");
+  if (mse('audio/mp4; codecs="ec-3"')) audioCodecs.push("eac3");
+  if (mse('audio/mp4; codecs="flac"')) audioCodecs.push("flac");
   return {
     videoCodecs,
     audioCodecs,
@@ -231,7 +237,8 @@ async function saveProgress() {
 function startPlayback() {
   if (!state.active) return;
   const saved = progressFor(state.active.id);
-  if (saved.position > 10 && !saved.completed && player.seekable?.length) {
+  // No HLS o hls.js já começou na posição salva (startPosition); aqui só o modo direto.
+  if (!state.usingHls && saved.position > 10 && !saved.completed && player.seekable?.length) {
     const max = player.seekable.end(player.seekable.length - 1);
     if (saved.position <= max) player.currentTime = saved.position;
   }
@@ -239,15 +246,32 @@ function startPlayback() {
   $("#player-status").textContent = "";
 }
 
+// Posição para retomar (a mesma regra de startPlayback): com a playlist VOD o hls.js já começa nela e o servidor
+// gera os segmentos a partir dali, sem converter o começo do filme.
+function resumePosition() {
+  const saved = state.active ? progressFor(state.active.id) : null;
+  return saved && saved.position > 10 && !saved.completed ? saved.position : -1;
+}
+
 function attachSource(url, mode) {
   state.usingHls = mode !== "direct";
   if (state.usingHls && window.Hls?.isSupported()) {
-    state.hls = new Hls({ maxBufferLength: 20, maxMaxBufferLength: 40, startFragPrefetch: true, manifestLoadingMaxRetry: 4, fragLoadingMaxRetry: 6 });
+    // Mesma configuração e recuperação de erros do jellyfin-web (htmlVideoPlayer + htmlMediaHelper).
+    state.hls = new Hls({ startPosition: resumePosition(), manifestLoadingTimeOut: 20000, maxBufferLength: 30, maxMaxBufferLength: 30 });
     state.hls.loadSource(url);
     state.hls.attachMedia(player);
     state.hls.on(Hls.Events.MANIFEST_PARSED, startPlayback);
+    let recuperacoesDeMidia = 0;
     state.hls.on(Hls.Events.ERROR, (_event, data) => {
-      if (data.fatal) fallbackUniversal(data.details || "erro HLS");
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR && data.response?.code >= 400) { fallbackUniversal(`servidor respondeu ${data.response.code}`); return; }
+      if (!data.fatal) return;
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) { state.hls.startLoad(); return; }
+      if (data.type === Hls.ErrorTypes.MEDIA_ERROR && recuperacoesDeMidia < 2) {
+        if (recuperacoesDeMidia++ === 1) state.hls.swapAudioCodec();
+        state.hls.recoverMediaError();
+        return;
+      }
+      fallbackUniversal(data.details || "erro HLS");
     });
   } else {
     player.src = url;
