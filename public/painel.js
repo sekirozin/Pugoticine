@@ -86,7 +86,27 @@ const AVISOS = { real: "painel-aviso-real", parcial: "painel-aviso-parcial", sal
 const estado = { paginas: [], atual: "painel", timer: null, container: null, f: null, abertos: new Set() };
 try { estado.atual = sessionStorage.getItem("painel:pagina") || "painel"; } catch { /* sem sessionStorage */ }
 
-export function fecharPainel() { clearTimeout(estado.timer); estado.timer = null; estado.container = null; }
+// Como no Jellyfin (apps/dashboard/AppLayout.tsx + components/drawer/AppDrawer.tsx): no Painel o menu lateral do app
+// dá lugar ao menu do Painel, com o cabeçalho (ícone, nome do servidor e versão) que volta para o início. Em tela
+// grande o menu fica fixo; no celular abre pelo botão de menu da barra superior, como o menu normal.
+export function fecharPainel() {
+  clearTimeout(estado.timer); estado.timer = null; estado.container = null;
+  document.querySelector("#painel-drawer")?.remove();
+  document.body.classList.remove("modo-painel");
+}
+
+function drawer() {
+  const sidebar = document.querySelector("#sidebar");
+  let gaveta = document.querySelector("#painel-drawer");
+  if (!gaveta) {
+    gaveta = document.createElement("div");
+    gaveta.id = "painel-drawer";
+    gaveta.className = "painel-drawer";
+    sidebar.append(gaveta);
+  }
+  document.body.classList.add("modo-painel");
+  return gaveta;
+}
 
 export async function abrirPainel(container, ferramentas) {
   estado.container = container; estado.f = ferramentas;
@@ -97,9 +117,13 @@ export async function abrirPainel(container, ferramentas) {
   if (!estado.paginas.some((p) => p.id === estado.atual)) estado.atual = "painel";
   const atual = estado.paginas.find((p) => p.id === estado.atual);
   if (atual?.pai) estado.abertos.add(atual.pai);
-  container.innerHTML = `<div class="painel-app"><nav class="painel-menu" aria-label="Painel">${menu()}</nav><div class="painel-conteudo" data-painel-conteudo></div></div>`;
-  container.querySelectorAll("[data-painel-ir]").forEach((b) => b.addEventListener("click", () => irPara(b.dataset.painelIr)));
-  container.querySelectorAll("[data-painel-expandir]").forEach((b) => b.addEventListener("click", () => {
+  const gaveta = drawer();
+  const servidor = estado.servidor ?? (estado.servidor = await ferramentas.api("/api/marca").catch(() => ({})));
+  gaveta.innerHTML = `<a class="painel-drawer-topo" href="/" data-painel-inicio title="Voltar para o início"><img src="/pugoticine-icon.svg" alt=""><span><strong>${ferramentas.escapeHtml(servidor.nomeServidor || "PugotiCine")}</strong><small>${ferramentas.escapeHtml(servidor.versao || "")}</small></span></a><nav class="painel-menu" aria-label="Painel">${menu()}</nav>`;
+  container.innerHTML = `<div class="painel-app"><div class="painel-conteudo" data-painel-conteudo></div></div>`;
+  gaveta.querySelector("[data-painel-inicio]").addEventListener("click", (ev) => { ev.preventDefault(); ferramentas.voltarAoInicio?.(); });
+  gaveta.querySelectorAll("[data-painel-ir]").forEach((b) => b.addEventListener("click", () => { ferramentas.fecharMenu?.(); irPara(b.dataset.painelIr); }));
+  gaveta.querySelectorAll("[data-painel-expandir]").forEach((b) => b.addEventListener("click", () => {
     const pai = b.dataset.painelExpandir;
     estado.abertos.has(pai) ? estado.abertos.delete(pai) : estado.abertos.add(pai);
     abrirPainel(container, ferramentas);
@@ -197,7 +221,7 @@ function ligarFormulario(alvo, pagina) {
       }
       status.textContent = "Configurações salvas.";
       estado.f.toast("Configurações salvas.");
-      if (pagina.id === "geral" || pagina.id === "marca") estado.f.aoMudarMarca?.();
+      if (pagina.id === "geral" || pagina.id === "marca") { estado.servidor = null; estado.f.aoMudarMarca?.(); }
     } catch (erro) { status.textContent = erro.message; }
   });
 }

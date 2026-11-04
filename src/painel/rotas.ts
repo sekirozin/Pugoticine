@@ -113,7 +113,7 @@ export class RotasPainel {
     const caminho = url.pathname;
     if (caminho === "/api/marca" && req.method === "GET") {
       const marca = banco.ler("marca"), geral = banco.ler("geral");
-      json(res, 200, { nomeServidor: geral.ServerName, cssPersonalizado: marca.CustomCss });
+      json(res, 200, { nomeServidor: geral.ServerName, cssPersonalizado: marca.CustomCss, versao: this.c.versao });
       return true;
     }
     if (!caminho.startsWith("/api/painel") && caminho !== "/api/configuracao/reproducao") return false;

@@ -107,7 +107,10 @@ function renderPainelView() {
   abrirPainel(content, {
     api, escapeHtml, toast,
     aoVarrer: (media) => { state.media = media; },
-    aoMudarMarca: aplicarMarca
+    aoMudarMarca: aplicarMarca,
+    // Cabeçalho do menu do Painel: volta ao app (o menu lateral normal reaparece).
+    voltarAoInicio: () => { state.view = "home"; state.query = ""; updateNavigation(); render(); },
+    fecharMenu: () => { if (innerWidth <= 700) toggleMenu(false); }
   });
 }
 
