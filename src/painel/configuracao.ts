@@ -209,7 +209,7 @@ export const PAGINAS: Pagina[] = [
     ]
   },
   {
-    id: "plugins", titulo: "Plugins", grupo: "Plugins", especial: true, efeito: { tipo: "salvo", texto: "Plugins " + NAO_IMPLEMENTADO.toLowerCase() + " A lista de repositórios é salva." },
+    id: "plugins", titulo: "Plugins", grupo: "Plugins", especial: true, efeito: { tipo: "salvo", texto: "Plugins " + NAO_IMPLEMENTADO.toLowerCase() + " Os plugins do Jellyfin são .NET e não rodam no PugotiCine (Node); a tela lista as integrações embutidas e a lista de repositórios é só salva." },
     secoes: [{ titulo: "Gerenciar Repositórios", campos: [
       { chave: "PluginRepositories", tipo: "lista", rotulo: "Repositórios", ajuda: "Um endereço por linha.", padrao: ["https://repo.jellyfin.org/files/plugin/manifest.json"], validarItem: "url" }
     ] }]

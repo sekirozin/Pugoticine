@@ -181,6 +181,13 @@ try {
   assert.match(await admin.locator("[data-painel-conteudo]").innerText(), /Filmes[\s\S]*\/media\/movies/);
 
   await req("PUT", "/api/painel/config/geral", ADMIN, { ServerName: "PugotiCine" });
+  // 14) Plugins e TV ao Vivo: honestos (sem filtros mortos, motivo explicado, botões desativados).
+  await ir(admin, "plugins");
+  assert.match(await admin.locator("[data-catalogo-indisponivel]").innerText(), /Catálogo indisponível: .*\.NET/);
+  assert.equal(await admin.locator("[data-painel-plugins] .painel-filtro").count(), 0);
+  await ir(admin, "tv-ao-vivo");
+  assert.match(await admin.locator("[data-tv-indisponivel]").innerText(), /M3U\/HDHomeRun e guia XMLTV: ainda não implementados/);
+  assert.equal(await admin.locator("[data-tv-indisponivel] button").isDisabled(), true);
   assert.deepEqual(erros, []);
   console.log("PQA-233 ok");
 } finally {

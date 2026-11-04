@@ -408,12 +408,22 @@ async function telaAtividade(alvo, cabecalho) {
 }
 
 async function telaTvAoVivo(alvo, cabecalho) {
-  alvo.innerHTML = cabecalho() + `<section class="painel-cartao"><h3>Sintonizadores</h3><p class="painel-vazio">Nenhum sintonizador.</p><button type="button" class="painel-botao" disabled>Adicionar sintonizador</button></section>
+  alvo.innerHTML = cabecalho() + `<section class="painel-cartao" data-tv-indisponivel><h3>Sintonizadores</h3><p class="painel-vazio">Nenhum sintonizador.</p>
+    <p class="painel-ajuda">Sintonizador M3U/HDHomeRun e guia XMLTV: ainda não implementados no PugotiCine. Para assistir canais ao vivo o player precisa tocar transmissões contínuas, o que ainda não existe; adicionar um sintonizador agora só criaria uma lista que não toca. Por isso os botões estão desativados.</p>
+    <button type="button" class="painel-botao" disabled>Adicionar sintonizador</button></section>
     <section class="painel-cartao"><h3>Provedores de Dados do Guia da TV</h3><p class="painel-vazio">Nenhum provedor.</p><button type="button" class="painel-botao" disabled>Adicionar provedor</button> <button type="button" class="painel-botao" disabled>Atualizar Dados do Guia</button></section>`;
 }
 
 function listaPlugins() {
-  return `<section class="painel-cartao" data-painel-plugins><div class="painel-filtros"><button type="button" class="painel-filtro ativo">Todos</button><button type="button" class="painel-filtro">Instalado</button><button type="button" class="painel-filtro">Disponível</button></div><p class="painel-vazio">Nenhum plugin instalado.</p></section>`;
+  const integracoes = [
+    ["Login do PugotiLab", "Contas, senhas e sessões vêm do PugotiLab (no Jellyfin seria um plugin de autenticação)."],
+    ["Metadados do Radarr", "Sinopse, pôster, notas e classificação dos filmes (no Jellyfin seriam os plugins TMDb/OMDb)."],
+    ["Nomes de séries e animes", "Temporada e episódio pelas regras de nomes do Jellyfin."]
+  ];
+  return `<section class="painel-cartao" data-painel-plugins><h3>Meus Plugins</h3><p class="painel-vazio">Nenhum plugin instalado.</p>
+    <h3>Catálogo</h3><p class="painel-ajuda" data-catalogo-indisponivel>Catálogo indisponível: os plugins do Jellyfin são bibliotecas .NET e o PugotiCine roda em Node, então eles não podem ser instalados aqui. Os repositórios abaixo são só salvos.</p>
+    <h3>Integrações embutidas</h3><p class="painel-ajuda">Fazem parte do PugotiCine (não são plugins e não podem ser desinstaladas):</p>
+    ${integracoes.map(([nome, texto]) => `<div class="painel-pasta"><span><strong>${nome}</strong><small class="painel-ajuda">${texto}</small></span></div>`).join("")}</section>`;
 }
 
 async function telaChaves(alvo, cabecalho) {
