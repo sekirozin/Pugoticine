@@ -39,5 +39,7 @@ export const config = {
   bazarrUrl: (process.env.BAZARR_URL ?? "").replace(/\/$/, ""),
   bazarrApiKey: process.env.BAZARR_API_KEY ?? "",
   bazarrRaiz: process.env.BAZARR_RAIZ ?? "/jellyfin",
+  /** A mesma pasta vista pelo Pugoticine (no Zima: /media, a biblioteca inteira; padrão: MEDIA_ROOT). */
+  bazarrRaizLocal: path.resolve(process.env.BAZARR_RAIZ_LOCAL ?? process.env.MEDIA_ROOT ?? "/media/movies"),
   dispositivoVaapi: process.env.PUGOTICINE_VAAPI_DISPOSITIVO ?? "/dev/dri/renderD128"
 };

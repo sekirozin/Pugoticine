@@ -73,7 +73,7 @@ async function rotaOrganizador(req: IncomingMessage, res: ServerResponse): Promi
 }
 
 const bazarr = config.bazarrUrl && config.bazarrApiKey
-  ? new LegendasBazarr({ url: config.bazarrUrl, chave: config.bazarrApiKey, raizBazarr: config.bazarrRaiz, raizLocal: config.mediaRoot })
+  ? new LegendasBazarr({ url: config.bazarrUrl, chave: config.bazarrApiKey, raizBazarr: config.bazarrRaiz, raizLocal: config.bazarrRaizLocal })
   : null;
 /** Lê o histórico do Bazarr (em segundo plano) para rotular as legendas que ele baixou. */
 function sincronizarBazarr(): void {
