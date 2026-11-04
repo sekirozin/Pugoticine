@@ -61,3 +61,5 @@ Novo pedido do usuário: manter Lima (#C8FF00) e adicionar Laranja do PugotiRead
 ## Último handoff atualizado
 
 Codex, 2026-11-04: paletas Lima/Laranja integradas ao componente de conta e CSS do Pugoticine; próximo teste e deploy.
+
+Correção de integração: seletor CSS da paleta com especificidade superior às variáveis originais de cada serviço; próximo validar e publicar a imagem final.

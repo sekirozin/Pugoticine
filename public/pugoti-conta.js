@@ -39,8 +39,8 @@
   const curto = (nome) => { const t = nome.replace(/^Pugoti/, ""); return t ? t.charAt(0).toUpperCase() + t.slice(1) : nome; };
 
   const CSS = `
-html[data-pugoti-paleta="lima"]{--pa-accent:#c8ff00;--primary:#c8ff00;--brand:#c8ff00;--brand2:#dcff5c;--blue:#c8ff00;--accent:#c8ff00}
-html[data-pugoti-paleta="laranja"]{--pa-accent:#d97706;--primary:#d97706;--brand:#d97706;--brand2:#f59e0b;--blue:#d97706;--accent:#d97706}
+html[data-pugoti-paleta="lima"][data-pugoti-tema]{--pa-accent:#c8ff00;--primary:#c8ff00;--brand:#c8ff00;--brand2:#dcff5c;--blue:#c8ff00;--accent:#c8ff00}
+html[data-pugoti-paleta="laranja"][data-pugoti-tema]{--pa-accent:#d97706;--primary:#d97706;--brand:#d97706;--brand2:#f59e0b;--blue:#d97706;--accent:#d97706}
 html[data-pugoti-tema="escuro"][data-pugoti-paleta]{--bg:#101010;--text:#fff;--panel:#171717;--panel2:#242424;--line:#393939;--soft:#242424}
 html[data-pugoti-tema="escuro"][data-pugoti-paleta] body{background:#101010;color:#fff}
 pugoti-conta{display:inline-block;position:relative;flex:none;font-family:inherit;line-height:normal;
