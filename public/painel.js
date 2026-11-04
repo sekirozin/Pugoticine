@@ -442,8 +442,12 @@ async function telaChaves(alvo, cabecalho) {
 
 async function telaBackups(alvo, cabecalho) {
   const e = estado.f.escapeHtml;
-  const { backups } = await estado.f.api("/api/painel/backups");
-  alvo.innerHTML = cabecalho(`<button type="button" class="painel-botao primario" data-criar-backup>Criar backup</button>`) + `<section class="painel-cartao">${tabela(["Arquivo", "Tamanho", "Criado em", ""],
+  const { backups, restauracaoPendente: pendente } = await estado.f.api("/api/painel/backups");
+  const aviso = pendente ? `<section class="painel-cartao painel-aviso-restauracao" data-restauracao-pendente><h3>Restauração agendada</h3>
+    <p>O backup <strong>${e(pendente.backup)}</strong> será aplicado quando o PugotiCine reiniciar. Reinicie o container para concluir (no ZimaOS: reiniciar o app PugotiCine).</p>
+    <p class="painel-ajuda">Antes foi criado o backup de segurança <strong>${e(pendente.seguranca)}</strong>, para voltar atrás se precisar.</p>
+    <div class="painel-acoes"><button type="button" class="painel-botao" data-cancelar-restauracao>Cancelar restauração</button></div></section>` : "";
+  alvo.innerHTML = cabecalho(`<button type="button" class="painel-botao primario" data-criar-backup>Criar backup</button>`) + aviso + `<section class="painel-cartao">${tabela(["Arquivo", "Tamanho", "Criado em", ""],
     backups.map((b) => `<tr data-backup="${e(b.nome)}"><td>${e(b.nome)}</td><td>${bytes(b.tamanho)}</td><td>${e(data(b.criadoEm))}</td><td class="painel-acoes-linha"><a class="painel-botao pequeno" href="/api/painel/backups/${encodeURIComponent(b.nome)}" download>Baixar</a><button type="button" class="painel-botao pequeno" data-restaurar="${e(b.nome)}">Restaurar</button><button type="button" class="painel-botao pequeno perigo" data-excluir-backup="${e(b.nome)}">Excluir</button></td></tr>`),
     "Nenhum backup ainda.")}</section>`;
   alvo.querySelector("[data-criar-backup]").addEventListener("click", async (ev) => {
@@ -453,9 +457,19 @@ async function telaBackups(alvo, cabecalho) {
     mostrarPagina();
   });
   alvo.querySelectorAll("[data-restaurar]").forEach((b) => b.addEventListener("click", async () => {
-    const r = await fetch(`/api/painel/backups/${encodeURIComponent(b.dataset.restaurar)}/restaurar`, { method: "POST" });
-    estado.f.toast((await r.json()).error ?? "Restauração concluída com sucesso");
+    const nome = b.dataset.restaurar;
+    const digitado = prompt(`Restaurar substitui TODOS os dados atuais (progresso, usuários, bibliotecas, configurações e salas) pelos do backup.\nUm backup de segurança será criado antes.\n\nPara confirmar, digite o nome do backup:\n${nome}`);
+    if (digitado === null) return;
+    const r = await fetch(`/api/painel/backups/${encodeURIComponent(nome)}/restaurar`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirmar: digitado.trim() }) });
+    const corpo = await r.json();
+    estado.f.toast(r.ok ? "Restauração agendada: reinicie o PugotiCine para aplicar." : corpo.error);
+    mostrarPagina();
   }));
+  alvo.querySelector("[data-cancelar-restauracao]")?.addEventListener("click", async () => {
+    await fetch("/api/painel/backups/restauracao", { method: "DELETE" });
+    estado.f.toast("Restauração cancelada.");
+    mostrarPagina();
+  });
   alvo.querySelectorAll("[data-excluir-backup]").forEach((b) => b.addEventListener("click", async () => {
     if (!confirm("Excluir este backup?")) return;
     await fetch(`/api/painel/backups/${encodeURIComponent(b.dataset.excluirBackup)}`, { method: "DELETE" });

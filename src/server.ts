@@ -13,7 +13,7 @@ import { ProbeService } from "./probe.js";
 import { Store } from "./store.js";
 import { BancoPainel } from "./painel/banco.js";
 import { GerenciadorBibliotecas } from "./painel/bibliotecas.js";
-import { Backups } from "./painel/backups.js";
+import { Backups, aplicarRestauracaoPendente } from "./painel/backups.js";
 import { Registros } from "./painel/registros.js";
 import { RotasPainel } from "./painel/rotas.js";
 import { Transcoder } from "./transcoder.js";
@@ -29,8 +29,14 @@ fs.mkdirSync(config.dataDir, { recursive: true });
 // Painel › Registros: o que o processo escreve no console também vai para data/registros/log_AAAAMMDD.log.
 const registros = new Registros(path.join(config.dataDir, "registros"));
 registros.instalar();
+// Painel › Backups: restauração agendada é aplicada aqui, antes de qualquer banco ser aberto.
+const fontesBackup = [{ nome: "pugoticine.db", arquivo: config.dbFile }, { nome: "painel.db", arquivo: path.join(config.dataDir, "painel.db") },
+  { nome: "salas.db", arquivo: path.join(config.dataDir, "salas.db") }];
+const restaurado = aplicarRestauracaoPendente(path.join(config.dataDir, "restauracao-pendente"), fontesBackup);
+if (restaurado) console.warn(`Backup restaurado: ${restaurado.backup} (${restaurado.arquivos.join(", ")}). Backup de segurança: ${restaurado.seguranca}.`);
 // Painel › Bibliotecas: o catálogo é a soma das bibliotecas (a padrão é MEDIA_ROOT, com os IDs de sempre).
 const bancoPainel = new BancoPainel(path.join(config.dataDir, "painel.db"));
+if (restaurado) bancoPainel.registrar("BackupRestored", `Backup restaurado: ${restaurado.backup}`, null, `Backup de segurança: ${restaurado.seguranca}`, "Warning");
 const raizesPermitidas = (process.env.PUGOTICINE_PASTAS_PERMITIDAS ?? "/media").split(",").map(r => path.resolve(r.trim())).filter(Boolean);
 const catalog = new GerenciadorBibliotecas(bancoPainel.db, config.mediaRoot, raizesPermitidas, () => { lastScanAt = new Date().toISOString(); });
 const store = new Store(config.dbFile);
@@ -76,9 +82,7 @@ let lastScanAt = "";
 const versaoApp = JSON.parse(fs.readFileSync(path.join(config.publicDir, "..", "package.json"), "utf8")).version as string;
 const painel = new RotasPainel({
   banco: bancoPainel, registros, json, corpo: body, bibliotecas: catalog, raizesPermitidas,
-  backups: new Backups(path.join(config.dataDir, "backups"), [
-    { nome: "pugoticine.db", arquivo: config.dbFile }, { nome: "painel.db", arquivo: path.join(config.dataDir, "painel.db") },
-    { nome: "salas.db", arquivo: path.join(config.dataDir, "salas.db") }], versaoApp),
+  backups: new Backups(path.join(config.dataDir, "backups"), fontesBackup, versaoApp),
   catalogo: () => catalog.list(), ultimaVarredura: () => lastScanAt, atividadeProgresso: () => store.listActivity(50),
   varrer: async () => { scan(); return catalog.list().length; }, atualizarMetadados: () => metadata.refresh(),
   intervaloMs: config.scanIntervalMs, raizMidia: config.mediaRoot, pastaDados: config.dataDir, ffmpeg: config.ffmpegPath, versao: versaoApp

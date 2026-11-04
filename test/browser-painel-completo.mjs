@@ -154,7 +154,7 @@ try {
   await admin.waitForFunction(() => !document.body.innerText.includes("Kodi da sala"));
   assert.equal((await req("GET", "/api/painel", { "X-PugotiCine-Token": token })).status, 401, "revogada não vale");
 
-  // 11) Backups: criar, baixar (tar), restaurar avisa que não existe.
+  // 11) Backups: criar, baixar (tar); restaurar sem digitar o nome é recusado (o fluxo completo é o PQA-240).
   await ir(admin, "backups");
   const antes = await admin.locator("[data-backup]").count();
   await admin.locator("[data-criar-backup]").click();
@@ -164,7 +164,7 @@ try {
   assert.deepEqual([tar.tipo, tar.ustar], ["application/x-tar", "ustar"]);
   assert.ok(tar.tamanho > 2048);
   await admin.locator(`[data-restaurar="${nome}"]`).click();
-  await admin.waitForFunction(() => /ainda não foi implementado/.test(document.querySelector("#toast")?.textContent ?? ""));
+  await admin.waitForFunction(() => /Confirme a restauração digitando/.test(document.querySelector("#toast")?.textContent ?? ""));
 
   // 12) Registros: arquivo real do processo.
   await ir(admin, "registros");

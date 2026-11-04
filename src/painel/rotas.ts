@@ -191,7 +191,12 @@ export class RotasPainel {
         json(res, ok ? 200 : 404, { ok });
         return true;
       }
-      if (caminho === "/api/painel/backups" && metodo === "GET") { json(res, 200, { backups: this.c.backups.listar() }); return true; }
+      if (caminho === "/api/painel/backups" && metodo === "GET") { json(res, 200, { backups: this.c.backups.listar(), restauracaoPendente: this.c.backups.restauracaoPendente() }); return true; }
+      if (caminho === "/api/painel/backups/restauracao" && metodo === "DELETE") {
+        if (this.c.backups.cancelarRestauracao()) banco.registrar("BackupRestoreCanceled", "Restauração de backup cancelada", perfil.username);
+        json(res, 200, { restauracaoPendente: null });
+        return true;
+      }
       if (caminho === "/api/painel/backups" && metodo === "POST") {
         const backup = await this.c.backups.criar();
         banco.registrar("BackupCreated", `Backup criado: ${backup.nome}`, perfil.username);
@@ -200,7 +205,14 @@ export class RotasPainel {
       }
       r = m(/^\/api\/painel\/backups\/(pugoticine-backup-\d{14}\.tar)(\/restaurar)?$/);
       if (r) {
-        if (r[2] && metodo === "POST") { json(res, 501, { error: "Restaurar backup ainda não foi implementado no PugotiCine." }); return true; }
+        if (r[2] && metodo === "POST") {
+          const { confirmar } = await this.c.corpo<{ confirmar?: string }>(req).catch(() => ({ confirmar: undefined }));
+          if (confirmar !== r[1]) { json(res, 400, { error: "Confirme a restauração digitando o nome do backup." }); return true; }
+          const pedido = await this.c.backups.agendarRestauracao(r[1]);
+          banco.registrar("BackupRestoreScheduled", `Restauração agendada: ${r[1]}`, perfil.username, `Backup de segurança: ${pedido.seguranca}. Será aplicada ao reiniciar o PugotiCine.`, "Warning");
+          json(res, 200, { restauracaoPendente: pedido });
+          return true;
+        }
         const arquivo = this.c.backups.caminho(r[1]);
         if (!arquivo) { json(res, 404, { error: "Backup não encontrado." }); return true; }
         if (metodo === "GET") {

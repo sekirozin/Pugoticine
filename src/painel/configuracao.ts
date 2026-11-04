@@ -252,7 +252,7 @@ export const PAGINAS: Pagina[] = [
     ]
   },
   { id: "chaves", titulo: "Chaves da API", grupo: "Avançado", especial: true, efeito: { tipo: "real", texto: "Chaves reais: dão acesso de administrador à API pelo cabeçalho X-PugotiCine-Token." }, secoes: [] },
-  { id: "backups", titulo: "Backups", grupo: "Avançado", especial: true, efeito: { tipo: "parcial", texto: "Criar, baixar e excluir backups funciona de verdade. Restaurar: " + NAO_IMPLEMENTADO.split(":")[0] + "." }, secoes: [] },
+  { id: "backups", titulo: "Backups", grupo: "Avançado", especial: true, efeito: { tipo: "real", texto: "Criar, baixar, excluir e restaurar funcionam de verdade. Restaurar valida o backup, cria antes um backup de segurança e troca os bancos na próxima inicialização do PugotiCine (reinicie o container). Mídias e configurações de ambiente não entram no backup." }, secoes: [] },
   {
     id: "registros", titulo: "Registros", grupo: "Avançado", especial: true,
     efeito: { tipo: "real", texto: "Arquivos de registro reais do processo do PugotiCine; o aviso de resposta lenta é aplicado de verdade." },
