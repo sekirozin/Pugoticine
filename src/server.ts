@@ -9,6 +9,7 @@ import { config } from "./config.js";
 import { streamFile, subtitleToVtt } from "./media.js";
 import { MetadataCatalog } from "./metadata.js";
 import { Tmdb } from "./tmdb.js";
+import { LegendasBazarr } from "./bazarr.js";
 import { Organizador } from "./organizador.js";
 import { createPlaybackPlan } from "./playback.js";
 import { ProbeService } from "./probe.js";
@@ -71,6 +72,14 @@ async function rotaOrganizador(req: IncomingMessage, res: ServerResponse): Promi
   void organizador.organizar({ pasta, hash: corpo.hash ? String(corpo.hash) : undefined, nome: corpo.nome ? String(corpo.nome) : undefined });
 }
 
+const bazarr = config.bazarrUrl && config.bazarrApiKey
+  ? new LegendasBazarr({ url: config.bazarrUrl, chave: config.bazarrApiKey, raizBazarr: config.bazarrRaiz, raizLocal: config.mediaRoot })
+  : null;
+/** Lê o histórico do Bazarr (em segundo plano) para rotular as legendas que ele baixou. */
+function sincronizarBazarr(): void {
+  bazarr?.sincronizar().catch((erro) => console.error("Falha ao ler o histórico do Bazarr:", erro instanceof Error ? erro.message : erro));
+}
+
 /** Busca no TMDB o que ainda não está no cache (em segundo plano). */
 function sincronizarTmdb(): void {
   if (!tmdb) return;
@@ -130,6 +139,7 @@ function scan(): void {
   lastScanAt = new Date().toISOString();
   console.log(`Catálogo atualizado: ${items.length} mídia(s).`);
   sincronizarTmdb();
+  sincronizarBazarr();
 }
 
 function json(res: ServerResponse, status: number, body: unknown): void {
@@ -154,6 +164,7 @@ async function authenticated(req: IncomingMessage, res: ServerResponse): Promise
 function publicMedia(profile: PugotiProfile) {
   return catalog.list().map((media) => metadata.enrich(media)).filter((media) => painel.podeVer(profile, media)).map(({ absolutePath: _absolutePath, ...item }) => ({
     ...item,
+    subtitles: bazarr ? item.subtitles.map((legenda) => bazarr.rotular(legenda)) : item.subtitles,
     // Endereços versionados das imagens; o cliente acrescenta &l=<largura> (srcset).
     imagens: {
       poster: `/api/media/${item.id}/imagem/poster?v=${imagens.versao(item as unknown as MediaItem, item.metadata?.posterUrl ?? "")}`,
@@ -318,6 +329,8 @@ metadata.refresh().catch((error) => console.error("Falha ao atualizar metadados:
 // Painel › Tarefas Agendadas: os gatilhos de cada tarefa (padrão: varredura e metadados a cada SCAN_INTERVAL_MS)
 // são verificados pelo agendador, como o TaskManager do Jellyfin.
 painel.iniciarAgendador();
+// Legendas novas do Bazarr aparecem com o rótulo certo sem esperar a próxima varredura.
+if (bazarr) setInterval(sincronizarBazarr, 5 * 60 * 1000).unref();
 const server = http.createServer(async (req, res) => {
   try {
     if (req.url === "/health") { json(res, 200, { status: "ok", media: catalog.list().length, lastScanAt }); return; }

@@ -35,5 +35,9 @@ export const config = {
     series: process.env.ORGANIZADOR_RAIZ_SERIES ?? "/jellyfin/Séries",
     animes: process.env.ORGANIZADOR_RAIZ_ANIMES ?? "/jellyfin/Animes"
   },
+  // Bazarr: o histórico dele diz quais legendas ele baixou (rótulo "Bazarr - PT-BR" no player).
+  bazarrUrl: (process.env.BAZARR_URL ?? "").replace(/\/$/, ""),
+  bazarrApiKey: process.env.BAZARR_API_KEY ?? "",
+  bazarrRaiz: process.env.BAZARR_RAIZ ?? "/jellyfin",
   dispositivoVaapi: process.env.PUGOTICINE_VAAPI_DISPOSITIVO ?? "/dev/dri/renderD128"
 };

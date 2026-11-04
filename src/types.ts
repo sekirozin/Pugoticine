@@ -11,6 +11,8 @@ export type Subtitle = {
   label: string;
   language: "pt-BR" | "en" | "unknown";
   path: string;
+  /** "bazarr" quando o arquivo foi baixado pelo Bazarr (histórico dele). */
+  origem?: "bazarr";
 };
 
 export type MediaMetadata = {

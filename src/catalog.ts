@@ -12,7 +12,7 @@ function stableId(value: string): string {
 
 function subtitleLanguage(fileName: string): Subtitle["language"] {
   const value = fileName.toLowerCase();
-  if (/(^|[. _-])(pt-br|pt_br|por|pob)([. _-]|$)/.test(value)) return "pt-BR";
+  if (/(^|[. _-])(pt-br|pt_br|por|pob|pb)([. _-]|$)/.test(value)) return "pt-BR";
   if (/(^|[. _-])(en|eng|english)([. _-]|$)/.test(value)) return "en";
   return "unknown";
 }
@@ -46,32 +46,60 @@ function walk(root: string): string[] {
   return files;
 }
 
+/** Rótulo pelo nome: "<vídeo>.Forçada.pt-BR.srt" → "Forçada"; sem trecho extra, o nome do idioma. */
+function subtitleLabel(fileName: string, videoBase: string | null, language: Subtitle["language"]): string {
+  const padrao = language === "pt-BR" ? "Português (Brasil)" : language === "en" ? "English" : null;
+  if (!videoBase) return padrao ?? fileName;
+  const meio = path.basename(fileName, path.extname(fileName)).slice(videoBase.length).replace(/^[. _-]+/, "")
+    .replace(/(^|[. _-])(pt-br|pt_br|por|pob|pb|pt|en|eng|english)$/i, "").replace(/[. _-]+$/, "").trim();
+  return meio || padrao || fileName;
+}
+
+/** A legenda é do vídeo cujo nome (sem extensão) começa o nome dela: "Ep01.pt-BR.srt" → "Ep01.mkv". */
+function videoDaLegenda(legenda: string, videos: string[]): string | null {
+  const nome = path.basename(legenda).toLowerCase();
+  let melhor: string | null = null;
+  for (const video of videos) {
+    const base = path.basename(video, path.extname(video)).toLowerCase();
+    if (nome.startsWith(`${base}.`) && (!melhor || base.length > path.basename(melhor, path.extname(melhor)).length)) melhor = video;
+  }
+  return melhor;
+}
+
 export function scanCatalog(root: string): MediaItem[] {
   const resolvedRoot = path.resolve(root);
   const files = walk(resolvedRoot);
-  const subtitlesByDirectory = new Map<string, Subtitle[]>();
+  const isVideo = (file: string) => videoExtensions.has(path.extname(file).toLowerCase()) && !path.basename(file).includes(".tmp.");
+  const videosByDirectory = new Map<string, string[]>();
+  for (const file of files.filter(isVideo)) videosByDirectory.set(path.dirname(file), [...(videosByDirectory.get(path.dirname(file)) ?? []), file]);
+
+  const subtitlesByVideo = new Map<string, Subtitle[]>();
   for (const file of files) {
     if (!subtitleExtensions.has(path.extname(file).toLowerCase())) continue;
-    const relative = path.relative(resolvedRoot, file);
+    const videos = videosByDirectory.get(path.dirname(file)) ?? [];
+    // Pasta com um vídeo só: qualquer legenda é dele (como antes). Com vários (temporada): só a de mesmo nome.
+    const video = videoDaLegenda(file, videos) ?? (videos.length === 1 ? videos[0]! : null);
+    if (!video) continue;
     const language = subtitleLanguage(path.basename(file));
+    const nomeDoVideo = path.basename(video, path.extname(video));
+    const comeca = path.basename(file).toLowerCase().startsWith(`${nomeDoVideo.toLowerCase()}.`);
     const subtitle: Subtitle = {
-      id: stableId(relative),
-      label: language === "pt-BR" ? "Português (Brasil)" : language === "en" ? "English" : path.basename(file),
+      id: stableId(path.relative(resolvedRoot, file)),
+      label: subtitleLabel(path.basename(file), comeca ? nomeDoVideo : null, language),
       language,
       path: file
     };
-    const directory = path.dirname(file);
-    subtitlesByDirectory.set(directory, [...(subtitlesByDirectory.get(directory) ?? []), subtitle]);
+    subtitlesByVideo.set(video, [...(subtitlesByVideo.get(video) ?? []), subtitle]);
   }
 
   return files.flatMap((file): MediaItem[] => {
+    if (!isVideo(file)) return [];
     const extension = path.extname(file).toLowerCase();
-    if (!videoExtensions.has(extension) || path.basename(file).includes(".tmp.")) return [];
     const relativePath = path.relative(resolvedRoot, file);
     const topDirectory = relativePath.split(path.sep)[0] || path.basename(file, extension);
     const { title, year } = mediaTitle(topDirectory);
     const stat = fs.statSync(file);
-    const subtitles = (subtitlesByDirectory.get(path.dirname(file)) ?? [])
+    const subtitles = (subtitlesByVideo.get(file) ?? [])
       .sort((a, b) => ({ "pt-BR": 0, en: 1, unknown: 2 }[a.language] - { "pt-BR": 0, en: 1, unknown: 2 }[b.language]));
     return [{
       id: stableId(relativePath), title, year, relativePath, absolutePath: file,

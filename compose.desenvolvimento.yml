@@ -18,6 +18,10 @@ services:
       PUGOTICINE_ACELERACAO: "vaapi"
       # Metadados do TMDB (opcional): exporte TMDB_READ_TOKEN antes de subir; sem ele, só Radarr/quadros do vídeo.
       TMDB_READ_TOKEN: ${TMDB_READ_TOKEN:-}
+      # Bazarr falso (histórico de legendas): rótulo "Bazarr - PT-BR" no player (PQA-266).
+      BAZARR_URL: "http://bazarr-dev:8080"
+      BAZARR_API_KEY: "bazarr-dev"
+      BAZARR_RAIZ: "/jellyfin"
       TZ: "America/Maceio"
     volumes:
       - pugoticine-dados:/app/data
@@ -29,6 +33,7 @@ services:
       - /dev/dri:/dev/dri
     depends_on:
       - login-dev
+      - bazarr-dev
     restart: "no"
   login-dev:
     image: node:20-alpine
@@ -37,6 +42,12 @@ services:
       - ./dev/login-dev:/login:ro
     ports:
       - "127.0.0.1:3015:8080"
+    restart: "no"
+  bazarr-dev:
+    image: node:20-alpine
+    command: ["node", "/bazarr/servidor.mjs"]
+    volumes:
+      - ./dev/bazarr-dev:/bazarr:ro
     restart: "no"
 volumes:
   pugoticine-dados:
