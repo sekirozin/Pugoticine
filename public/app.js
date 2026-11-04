@@ -1,5 +1,6 @@
 import { abrirPainel, fecharPainel } from "/painel.js";
 import { abrirOsd, definirDuracao, definirFonteDeInfo, fecharOsd } from "/player-osd.js";
+import { renderCatalogo } from "/inicio.js";
 
 const state = {
   profile: null,
@@ -59,49 +60,6 @@ function progressFor(id) {
   return state.progress.get(id) || { position: 0, duration: 0, completed: false };
 }
 
-function visibleMedia() {
-  const query = state.query.trim().toLocaleLowerCase("pt-BR");
-  let items = state.media.filter((item) => !query || `${item.title} ${item.year || ""}`.toLocaleLowerCase("pt-BR").includes(query));
-  if (state.view === "continue") {
-    items = items.filter((item) => {
-      const progress = progressFor(item.id);
-      return progress.position > 30 && !progress.completed;
-    });
-  }
-  return items;
-}
-
-function card(item) {
-  const progress = progressFor(item.id);
-  const percent = progress.duration ? Math.min(100, progress.position / progress.duration * 100) : 0;
-  const metadata = item.metadata || {};
-  const scores = [
-    metadata.audienceScore ? `Público ${metadata.audienceScore}%` : "",
-    metadata.criticScore ? `Crítica ${metadata.criticScore}%` : ""
-  ].filter(Boolean).join(" · ");
-  const poster = metadata.posterUrl
-    ? ` style="background-image:linear-gradient(to top,rgba(0,0,0,.35),transparent 45%),url('${encodeURI(metadata.posterUrl).replace(/'/g, "%27")}')"`
-    : "";
-  return `<button class="media-card" data-play="${item.id}" title="${escapeHtml(metadata.overview || item.title)}">
-    <div class="poster${metadata.posterUrl ? " has-image" : ""}"${poster}>
-      <span class="poster-mark">${escapeHtml(item.title.charAt(0))}</span>
-      ${scores ? `<span class="score-badge">${escapeHtml(scores)}</span>` : ""}
-      ${percent ? `<div class="progress-track"><div class="progress-value" style="width:${percent}%"></div></div>` : ""}
-    </div>
-    <div class="media-info">
-      <span class="media-title">${escapeHtml(item.title)}</span>
-      <div class="media-meta">${item.year || "Ano não informado"}${scores ? ` · ${escapeHtml(scores)}` : ""}</div>
-    </div>
-  </button>`;
-}
-
-function section(title, description, items) {
-  return `<section class="section">
-    <div class="section-heading"><div><h2>${escapeHtml(title)}</h2>${description ? `<p>${escapeHtml(description)}</p>` : ""}</div></div>
-    ${items.length ? `<div class="media-grid">${items.map(card).join("")}</div>` : `<div class="empty">Nenhum filme encontrado nesta seção.</div>`}
-  </section>`;
-}
-
 // Painel do administrador (public/painel.js): menu do Painel do Jellyfin com uma tela por item.
 function renderPainelView() {
   abrirPainel(content, {
@@ -125,21 +83,8 @@ async function aplicarMarca() {
 function render() {
   if (state.view === "painel") { renderPainelView(); return; }
   fecharPainel();
-  const items = visibleMedia();
-  if (state.view === "home" && !state.query) {
-    const recent = state.media.filter((item) => {
-      const progress = progressFor(item.id);
-      return progress.position > 30 && !progress.completed;
-    }).sort((a, b) => (progressFor(b.id).updatedAt || "").localeCompare(progressFor(a.id).updatedAt || ""));
-    content.innerHTML = `<section class="hero"><div><span class="eyebrow">Sua mídia. Sua biblioteca.</span>
-      <h1>Pugoticine</h1><p>Filmes hospedados no seu servidor, com progresso individual integrado à sua conta Pugotilab.</p></div></section>
-      ${recent.length ? section("Continuar assistindo", "Retome de onde parou.", recent.slice(0, 6)) : ""}
-      ${section("Sua biblioteca", `${state.media.length} filme(s) disponível(is).`, state.media.slice(0, 12))}`;
-  } else {
-    const title = state.query ? `Resultados para “${state.query}”` : state.view === "continue" ? "Continuar assistindo" : "Filmes";
-    content.innerHTML = section(title, state.query ? `${items.length} resultado(s).` : "Todos os títulos disponíveis.", items);
-  }
-  document.querySelectorAll("[data-play]").forEach((button) => button.addEventListener("click", () => openPlayer(button.dataset.play)));
+  // Catálogo no estilo de streaming (public/inicio.js): destaque, fileiras, cartões e janela de detalhes.
+  renderCatalogo(content, { media: state.media, view: state.view, query: state.query, progressFor, abrirPlayer: openPlayer, escapeHtml });
 }
 
 function updateNavigation() {

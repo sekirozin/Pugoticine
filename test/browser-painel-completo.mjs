@@ -21,7 +21,7 @@ async function pagina(usuario) {
   page.on("pageerror", e => erros.push(`${usuario}: ${e}`));
   page.on("dialog", d => d.accept());
   await page.goto(BASE);
-  await page.waitForSelector(".media-card");
+  await page.waitForSelector(".titulo");
   return page;
 }
 const ir = async (page, id) => {
@@ -71,7 +71,7 @@ try {
   assert.equal(await salvar(admin), "Configurações salvas.");
   await admin.waitForFunction(() => document.title === "Cine do Sekiro");
   // Recarregar volta ao Início; ao abrir o Painel de novo ele lembra a última tela (Geral) e relê do servidor.
-  await admin.reload(); await admin.waitForSelector(".media-card");
+  await admin.reload(); await admin.waitForSelector(".titulo");
   await admin.evaluate(() => document.querySelector("#painel-button").click());
   await admin.waitForSelector('[name="ServerName"]');
   assert.equal(await admin.locator('[name="ServerName"]').inputValue(), "Cine do Sekiro", "relido depois de recarregar");

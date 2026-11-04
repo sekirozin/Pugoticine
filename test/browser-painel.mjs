@@ -19,7 +19,7 @@ async function pagina(usuario) {
   const page = await contexto.newPage();
   page.on("pageerror", e => erros.push(`${usuario}: ${e}`));
   await page.goto(BASE);
-  await page.waitForSelector(".media-card");
+  await page.waitForSelector(".titulo");
   return page;
 }
 try {

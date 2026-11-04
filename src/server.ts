@@ -10,6 +10,7 @@ import { streamFile, subtitleToVtt } from "./media.js";
 import { MetadataCatalog } from "./metadata.js";
 import { createPlaybackPlan } from "./playback.js";
 import { ProbeService } from "./probe.js";
+import { Imagens, type TipoImagem } from "./imagens.js";
 import { Store } from "./store.js";
 import { BancoPainel } from "./painel/banco.js";
 import { Backups } from "./painel/backups.js";
@@ -22,7 +23,7 @@ import { detectarVaapi, type Aceleracao } from "./reproducao/aceleracao.js";
 import type { OpcoesConversao } from "./reproducao/hls.js";
 import { GerenciadorSalas } from "./salas/salas.js";
 import { RotasSalas } from "./salas/rotas.js";
-import type { PlaybackPlan, PlaybackRequest, PugotiProfile } from "./types.js";
+import type { PlaybackPlan, PlaybackRequest, PugotiProfile, MediaItem } from "./types.js";
 
 fs.mkdirSync(config.dataDir, { recursive: true });
 // Painel › Registros: o que o processo escreve no console também vai para data/registros/log_AAAAMMDD.log.
@@ -32,6 +33,8 @@ const catalog = new Catalog(config.mediaRoot);
 const store = new Store(config.dbFile);
 const metadata = new MetadataCatalog();
 const probe = new ProbeService(path.join(config.dataDir, "probe-cache.json"));
+// Pôsteres e fundos em WebP no tamanho certo (Radarr ou um quadro do próprio vídeo), em cache.
+const imagens = new Imagens(path.join(config.dataDir, "imagens"), config.ffmpegPath, (media) => { try { return probe.analyze(media).duration; } catch { return 0; } });
 const transcoder = new Transcoder(path.join(config.dataDir, "transcodes"));
 fs.mkdirSync(config.dataDir, { recursive: true });
 // Aceleração por GPU (VAAPI), como a do Jellyfin: cada dispositivo é testado uma vez; sem GPU ou se o teste falhar,
@@ -106,7 +109,14 @@ async function authenticated(req: IncomingMessage, res: ServerResponse): Promise
 }
 
 function publicMedia() {
-  return catalog.list().map((media) => metadata.enrich(media)).map(({ absolutePath: _absolutePath, ...item }) => item);
+  return catalog.list().map((media) => metadata.enrich(media)).map(({ absolutePath: _absolutePath, ...item }) => ({
+    ...item,
+    // Endereços versionados das imagens; o cliente acrescenta &l=<largura> (srcset).
+    imagens: {
+      poster: `/api/media/${item.id}/imagem/poster?v=${imagens.versao(item as MediaItem, item.metadata?.posterUrl ?? "")}`,
+      fundo: `/api/media/${item.id}/imagem/fundo?v=${imagens.versao(item as MediaItem, item.metadata?.backdropUrl ?? "")}`
+    }
+  }));
 }
 
 async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -139,6 +149,19 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<voi
     return;
   }
 
+  const imagemMatch = url.pathname.match(/^\/api\/media\/([a-f0-9]{24})\/imagem\/(poster|fundo)$/);
+  if (imagemMatch && req.method === "GET") {
+    const base = catalog.get(imagemMatch[1]);
+    if (!base) { json(res, 404, { error: "Mídia não encontrada." }); return; }
+    const media = metadata.enrich(base);
+    const tipo = imagemMatch[2] as TipoImagem;
+    const remota = (tipo === "poster" ? media.metadata?.posterUrl : media.metadata?.backdropUrl) ?? "";
+    const arquivo = await imagens.caminho(media, tipo, Number(url.searchParams.get("l")) || 500, remota);
+    const atual = url.searchParams.get("v") === imagens.versao(media, remota);
+    res.writeHead(200, { "content-type": "image/webp", "content-length": fs.statSync(arquivo).size, "cache-control": atual ? "private, max-age=31536000, immutable" : "private, no-cache" });
+    fs.createReadStream(arquivo).pipe(res);
+    return;
+  }
   const playbackMatch = url.pathname.match(/^\/api\/media\/([a-f0-9]{24})\/playback$/);
   if (playbackMatch && req.method === "POST") {
     const media = catalog.get(playbackMatch[1]);
