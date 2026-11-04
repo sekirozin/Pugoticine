@@ -9,6 +9,7 @@ import { config } from "./config.js";
 import { streamFile, subtitleToVtt } from "./media.js";
 import { MetadataCatalog } from "./metadata.js";
 import { Tmdb } from "./tmdb.js";
+import { Organizador } from "./organizador.js";
 import { createPlaybackPlan } from "./playback.js";
 import { ProbeService } from "./probe.js";
 import { Imagens, type TipoImagem } from "./imagens.js";
@@ -45,6 +46,30 @@ const store = new Store(config.dbFile);
 // Metadados em português do TMDB (mesma chave do PugotiList), por cima do Radarr. Sem chave, só Radarr.
 const tmdb = config.tmdbToken ? new Tmdb(config.tmdbToken, path.join(config.dataDir, "tmdb-cache.json"), config.tmdbApiUrl) : null;
 const metadata = new MetadataCatalog(tmdb);
+// Organizador: downloads feitos à mão no Transmission vão para Filmes/Séries/Animes via Radarr/Sonarr.
+const organizador = config.organizadorToken && config.radarrUrl && config.sonarrUrl && config.tmdbToken ? new Organizador({
+  radarr: { url: config.radarrUrl, chave: config.radarrApiKey }, sonarr: { url: config.sonarrUrl, chave: config.sonarrApiKey },
+  transmission: { url: config.transmissionUrl, usuario: config.transmissionUsuario, senha: config.transmissionSenha },
+  tmdb: { url: config.tmdbApiUrl, token: config.tmdbToken }, raizes: config.organizadorRaizes,
+  registrar: (resumo, detalhe, nivel) => bancoPainel.registrar("Organizador", resumo, null, detalhe, nivel)
+}) : null;
+/** POST /api/organizador/concluido (script do Transmission): token próprio, só pastas manuais de downloads concluídos. */
+async function rotaOrganizador(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const token = String(req.headers.authorization ?? "").replace(/^Bearer\s+/i, "");
+  const esperado = Buffer.from(config.organizadorToken);
+  if (!organizador || !token || token.length !== esperado.length || !crypto.timingSafeEqual(Buffer.from(token), esperado)) { json(res, 401, { error: "Token inválido." }); return; }
+  const corpo = await body<{ pasta?: string; hash?: string; nome?: string }>(req);
+  const raiz = path.resolve(config.organizadorPasta);
+  const pasta = path.resolve(String(corpo.pasta ?? ""));
+  const relativo = path.relative(raiz, pasta);
+  // Fora da pasta de concluídos, ou dentro das pastas do próprio Radarr/Sonarr/música: não mexe.
+  if (!corpo.pasta || relativo.startsWith("..") || path.isAbsolute(relativo) || !relativo || /^(radarr|tv-sonarr|music)([\\/]|$)/i.test(relativo)) {
+    json(res, 200, { aceito: false, motivo: "fora das pastas de downloads manuais" }); return;
+  }
+  json(res, 202, { aceito: true });
+  void organizador.organizar({ pasta, hash: corpo.hash ? String(corpo.hash) : undefined, nome: corpo.nome ? String(corpo.nome) : undefined });
+}
+
 /** Busca no TMDB o que ainda não está no cache (em segundo plano). */
 function sincronizarTmdb(): void {
   if (!tmdb) return;
@@ -294,6 +319,7 @@ painel.iniciarAgendador();
 const server = http.createServer(async (req, res) => {
   try {
     if (req.url === "/health") { json(res, 200, { status: "ok", media: catalog.list().length, lastScanAt }); return; }
+    if (req.url === "/api/organizador/concluido" && req.method === "POST") { await rotaOrganizador(req, res); return; }
     const rede = painel.acessoDeRede(req);
     if (!rede.permitido) { res.writeHead(403, { "content-type": "text/plain; charset=utf-8" }); res.end(`Acesso negado pela configuração de Redes do PugotiCine (${rede.motivo}).`); return; }
     if (req.url?.startsWith("/api/")) {

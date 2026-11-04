@@ -21,5 +21,19 @@ export const config = {
   // TMDB (metadados em português): token de leitura v4, o mesmo do PugotiList.
   tmdbToken: process.env.TMDB_READ_TOKEN ?? "",
   tmdbApiUrl: process.env.TMDB_API_URL ?? "https://api.themoviedb.org/3",
+  // Organizador de downloads feitos à mão (Transmission → Radarr/Sonarr → biblioteca).
+  sonarrUrl: (process.env.SONARR_URL ?? "").replace(/\/$/, ""),
+  sonarrApiKey: process.env.SONARR_API_KEY ?? "",
+  transmissionUrl: (process.env.TRANSMISSION_URL ?? "").replace(/\/$/, ""),
+  transmissionUsuario: process.env.TRANSMISSION_USUARIO ?? "",
+  transmissionSenha: process.env.TRANSMISSION_SENHA ?? "",
+  organizadorToken: process.env.PUGOTICINE_ORGANIZADOR_TOKEN ?? "",
+  /** Só pastas aqui dentro podem ser organizadas (caminhos como o Transmission/Radarr/Sonarr veem). */
+  organizadorPasta: process.env.ORGANIZADOR_PASTA ?? "/data/Downloads/complete",
+  organizadorRaizes: {
+    filmes: process.env.ORGANIZADOR_RAIZ_FILMES ?? "/jellyfin/Filmes",
+    series: process.env.ORGANIZADOR_RAIZ_SERIES ?? "/jellyfin/Séries",
+    animes: process.env.ORGANIZADOR_RAIZ_ANIMES ?? "/jellyfin/Animes"
+  },
   dispositivoVaapi: process.env.PUGOTICINE_VAAPI_DISPOSITIVO ?? "/dev/dri/renderD128"
 };
