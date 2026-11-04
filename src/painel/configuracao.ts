@@ -216,7 +216,7 @@ export const PAGINAS: Pagina[] = [
   },
   {
     id: "redes", titulo: "Redes", grupo: "Avançado",
-    efeito: { tipo: "salvo", texto: NAO_IMPLEMENTADO + " Portas, HTTPS e acesso remoto do PugotiCine são definidos pelo Docker e pelo proxy do PugotiLab." },
+    efeito: { tipo: "parcial", texto: "Têm efeito de verdade: Redes LAN (vazio = faixas privadas e Tailscale), Proxies conhecidos, Permitir conexões remotas e o filtro de IP remoto (lista branca/negra); o próprio servidor sempre passa e não dá para salvar algo que bloqueie você. Portas, HTTPS, URL base, vínculo de endereço, IPv4/IPv6, descoberta e URIs publicados: " + NAO_IMPLEMENTADO + " (são definidos pelo Docker e pelo proxy do PugotiLab)." },
     secoes: [
       { titulo: "Configurações da localização do servidor", campos: [
         { chave: "InternalHttpPort", tipo: "numero", rotulo: "Número da porta local de HTTP", padrao: 8096, min: 1, max: 65535 },
@@ -225,7 +225,7 @@ export const PAGINAS: Pagina[] = [
         { chave: "BaseUrl", tipo: "texto", rotulo: "URL Base", padrao: "", maximoTexto: 200 },
         { chave: "LocalNetworkAddresses", tipo: "lista", rotulo: "Vincular a um endereço de rede local", ajuda: "Um endereço IP por linha.", padrao: [], validarItem: "ip" },
         { chave: "LocalNetworkSubnets", tipo: "lista", rotulo: "Redes LAN", ajuda: "Uma rede por linha, no formato CIDR (ex.: 192.168.1.0/24).", padrao: [], validarItem: "subrede" },
-        { chave: "KnownProxies", tipo: "lista", rotulo: "Proxies conhecidos", ajuda: "Um endereço por linha.", padrao: [] }
+        { chave: "KnownProxies", tipo: "lista", rotulo: "Proxies conhecidos", ajuda: "Um endereço ou rede por linha. Só destes o cabeçalho X-Forwarded-For é aceito.", padrao: [], validarItem: "subrede" }
       ] },
       { titulo: "Configurações HTTPS", campos: [
         { chave: "RequireHttps", tipo: "booleano", rotulo: "Necessita HTTPS", padrao: false },
@@ -234,7 +234,7 @@ export const PAGINAS: Pagina[] = [
       ] },
       { titulo: "Configurações de acesso remoto", campos: [
         { chave: "EnableRemoteAccess", tipo: "booleano", rotulo: "Permitir conexões remotas a este servidor", padrao: true },
-        { chave: "RemoteIPFilter", tipo: "lista", rotulo: "Filtro de endereço IP remoto", ajuda: "Um endereço ou rede por linha.", padrao: [] },
+        { chave: "RemoteIPFilter", tipo: "lista", rotulo: "Filtro de endereço IP remoto", ajuda: "Um endereço ou rede por linha. Vale só para quem não é da rede local.", padrao: [], validarItem: "subrede" },
         { chave: "IsRemoteIPFilterBlacklist", tipo: "selecao", rotulo: "Modo do filtro de endereço IP remoto", padrao: "false", opcoes: [sn("false", "Lista branca"), sn("true", "Lista negra")] },
         { chave: "PublicHttpPort", tipo: "numero", rotulo: "Número da porta pública de HTTP", padrao: 8096, min: 1, max: 65535 },
         { chave: "PublicHttpsPort", tipo: "numero", rotulo: "Número da porta pública de HTTPS", padrao: 8920, min: 1, max: 65535 }

@@ -7,7 +7,8 @@ import { BancoPainel } from "./banco.js";
 import { GerenciadorBibliotecas, TIPOS_BIBLIOTECA, usuarioPodeVer, type Biblioteca } from "./bibliotecas.js";
 import path from "node:path";
 import { Backups } from "./backups.js";
-import { ErroValidacao, PAGINAS, pagina } from "./configuracao.js";
+import { ErroValidacao, PAGINAS, pagina, validar } from "./configuracao.js";
+import { filtroDeRede } from "./redes.js";
 import { disco, infoServidor, montarPainel, type RegistroAtividade } from "./painel.js";
 import { Registros } from "./registros.js";
 import { Agendador, DIAS, INTERVALOS_MS, descreverGatilho } from "./tarefas.js";
@@ -73,6 +74,13 @@ export class RotasPainel {
   }
 
   /** Usuários › Acesso à biblioteca e Controle dos pais: administrador vê tudo. */
+  /** Painel › Redes: decide se a conexão pode entrar (chamado antes de qualquer rota, até dos arquivos estáticos). */
+  private filtroRede: ReturnType<typeof filtroDeRede> | null = null;
+  acessoDeRede(req: IncomingMessage) {
+    this.filtroRede ??= filtroDeRede(this.c.banco.ler("redes"));
+    return this.filtroRede(req.socket.remoteAddress ?? "", req.headers["x-forwarded-for"]);
+  }
+
   podeVer(perfil: PugotiProfile, item: MediaItem): boolean {
     if (perfil.role === "admin") return true;
     return usuarioPodeVer(this.c.banco.usuario(perfil.username), item as MediaItem & { bibliotecaId?: string });
@@ -141,7 +149,13 @@ export class RotasPainel {
         if (!p || !p.secoes.length) { json(res, 404, { error: "Página sem configurações." }); return true; }
         if (metodo === "GET") { json(res, 200, { pagina: p, valores: banco.ler(p.id) }); return true; }
         if (metodo === "PUT") {
-          const valores = banco.salvar(p.id, await this.c.corpo<Record<string, unknown>>(req));
+          const entrada = await this.c.corpo<Record<string, unknown>>(req);
+          if (p.id === "redes") {
+            const depois = filtroDeRede(validar(p, entrada, banco.ler(p.id)))(req.socket.remoteAddress ?? "", req.headers["x-forwarded-for"]);
+            if (!depois.permitido) { json(res, 400, { error: `Esta configuração bloquearia o seu próprio acesso (${depois.ip}: ${depois.motivo}).` }); return true; }
+          }
+          const valores = banco.salvar(p.id, entrada);
+          if (p.id === "redes") this.filtroRede = null;
           banco.registrar("ConfigurationUpdated", `Configuração alterada: ${p.titulo}`, perfil.username);
           json(res, 200, { pagina: p, valores });
           return true;

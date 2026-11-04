@@ -253,6 +253,8 @@ painel.iniciarAgendador();
 const server = http.createServer(async (req, res) => {
   try {
     if (req.url === "/health") { json(res, 200, { status: "ok", media: catalog.list().length, lastScanAt }); return; }
+    const rede = painel.acessoDeRede(req);
+    if (!rede.permitido) { res.writeHead(403, { "content-type": "text/plain; charset=utf-8" }); res.end(`Acesso negado pela configuração de Redes do PugotiCine (${rede.motivo}).`); return; }
     if (req.url?.startsWith("/api/")) {
       const inicio = Date.now();
       await handleApi(req, res);
