@@ -53,8 +53,8 @@ export const PAGINAS: Pagina[] = [
       { chave: "CustomCss", tipo: "textoLongo", rotulo: "Código CSS personalizado", ajuda: "Aplica a sua estilização CSS personalizada para a interface web.", padrao: "", maximoTexto: 50000 }
     ] }]
   },
-  { id: "usuarios", titulo: "Usuários", grupo: "Servidor", especial: true, efeito: { tipo: "parcial", texto: "Lista quem já entrou (contas do PugotiLab). Desativar um usuário bloqueia o acesso de verdade. Limite de bitrate, sessões, SyncPlay e controle dos pais: " + NAO_IMPLEMENTADO }, secoes: [] },
-  { id: "bibliotecas", titulo: "Bibliotecas", grupo: "Servidor", pai: "Bibliotecas", especial: true, efeito: { tipo: "parcial", texto: "Rastrear funciona de verdade. Adicionar, renomear e remover bibliotecas: " + NAO_IMPLEMENTADO + " (depende do catálogo com várias bibliotecas)." }, secoes: [] },
+  { id: "usuarios", titulo: "Usuários", grupo: "Servidor", especial: true, efeito: { tipo: "parcial", texto: "Lista quem já entrou (contas do PugotiLab: nome, senha e login são do PugotiLab). Têm efeito de verdade: desativar, acesso por biblioteca e classificação etária máxima/bloquear sem classificação. Ocultar, limite de bitrate, sessões simultâneas e acesso às salas: " + NAO_IMPLEMENTADO }, secoes: [] },
+  { id: "bibliotecas", titulo: "Bibliotecas", grupo: "Servidor", pai: "Bibliotecas", especial: true, efeito: { tipo: "parcial", texto: "Adicionar, editar, remover e rastrear bibliotecas funciona de verdade (tipo, pastas, ativar e monitoramento em tempo real); séries e animes recebem o nome do episódio pelas regras do Jellyfin. Idioma/país dos metadados e atualização automática: " + NAO_IMPLEMENTADO + " Música e Livros: o PugotiCine só reproduz vídeo." }, secoes: [] },
   {
     id: "bibliotecas-exibicao", titulo: "Exibir", grupo: "Servidor", pai: "Bibliotecas", efeito: { tipo: "salvo", texto: NAO_IMPLEMENTADO },
     secoes: [{ campos: [

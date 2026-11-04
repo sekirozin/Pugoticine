@@ -12,6 +12,7 @@ import { createPlaybackPlan } from "./playback.js";
 import { ProbeService } from "./probe.js";
 import { Store } from "./store.js";
 import { BancoPainel } from "./painel/banco.js";
+import { GerenciadorBibliotecas } from "./painel/bibliotecas.js";
 import { Backups } from "./painel/backups.js";
 import { Registros } from "./painel/registros.js";
 import { RotasPainel } from "./painel/rotas.js";
@@ -28,7 +29,10 @@ fs.mkdirSync(config.dataDir, { recursive: true });
 // Painel › Registros: o que o processo escreve no console também vai para data/registros/log_AAAAMMDD.log.
 const registros = new Registros(path.join(config.dataDir, "registros"));
 registros.instalar();
-const catalog = new Catalog(config.mediaRoot);
+// Painel › Bibliotecas: o catálogo é a soma das bibliotecas (a padrão é MEDIA_ROOT, com os IDs de sempre).
+const bancoPainel = new BancoPainel(path.join(config.dataDir, "painel.db"));
+const raizesPermitidas = (process.env.PUGOTICINE_PASTAS_PERMITIDAS ?? "/media").split(",").map(r => path.resolve(r.trim())).filter(Boolean);
+const catalog = new GerenciadorBibliotecas(bancoPainel.db, config.mediaRoot, raizesPermitidas, () => { lastScanAt = new Date().toISOString(); });
 const store = new Store(config.dbFile);
 const metadata = new MetadataCatalog();
 const probe = new ProbeService(path.join(config.dataDir, "probe-cache.json"));
@@ -70,9 +74,8 @@ const hls = new GerenciadorHls(path.join(config.dataDir, "hls"), new CacheKeyfra
 const salas = new RotasSalas(new GerenciadorSalas(path.join(config.dataDir, "salas.db")), (id) => Boolean(catalog.get(id)), json, body);
 let lastScanAt = "";
 const versaoApp = JSON.parse(fs.readFileSync(path.join(config.publicDir, "..", "package.json"), "utf8")).version as string;
-const bancoPainel = new BancoPainel(path.join(config.dataDir, "painel.db"));
 const painel = new RotasPainel({
-  banco: bancoPainel, registros, json, corpo: body,
+  banco: bancoPainel, registros, json, corpo: body, bibliotecas: catalog, raizesPermitidas,
   backups: new Backups(path.join(config.dataDir, "backups"), [
     { nome: "pugoticine.db", arquivo: config.dbFile }, { nome: "painel.db", arquivo: path.join(config.dataDir, "painel.db") },
     { nome: "salas.db", arquivo: path.join(config.dataDir, "salas.db") }], versaoApp),
@@ -105,8 +108,12 @@ async function authenticated(req: IncomingMessage, res: ServerResponse): Promise
   return profile;
 }
 
-function publicMedia() {
-  return catalog.list().map((media) => metadata.enrich(media)).map(({ absolutePath: _absolutePath, ...item }) => item);
+// Painel › Usuários › Acesso à biblioteca e Controle dos pais: cada pessoa só vê (e só abre) o que pode.
+function publicMedia(profile: PugotiProfile) {
+  return catalog.list().map((media) => metadata.enrich(media)).filter((media) => painel.podeVer(profile, media)).map(({ absolutePath: _absolutePath, ...item }) => item);
+}
+function visivel<T extends { id: string }>(profile: PugotiProfile, media: T | null): T | null {
+  return media && painel.podeVer(profile, metadata.enrich(media as never)) ? media : null;
 }
 
 async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -120,19 +127,19 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<voi
   if (await salas.tratar(req, res, url, profile)) return;
 
   if (url.pathname === "/api/bootstrap" && req.method === "GET") {
-    json(res, 200, { profile, media: publicMedia(), progress: store.listProgress(profile.username), lastScanAt });
+    json(res, 200, { profile, media: publicMedia(profile), progress: store.listProgress(profile.username), lastScanAt });
     return;
   }
   if (url.pathname === "/api/catalog/scan" && req.method === "POST") {
     if (profile.role !== "admin") { json(res, 403, { error: "Apenas administradores podem atualizar o catálogo." }); return; }
     scan();
     await metadata.refresh();
-    json(res, 200, { media: publicMedia(), lastScanAt });
+    json(res, 200, { media: publicMedia(profile), lastScanAt });
     return;
   }
   if (url.pathname === "/api/progress" && req.method === "POST") {
     const input = await body<{ mediaId?: string; position?: number; duration?: number }>(req);
-    const media = catalog.get(String(input.mediaId ?? ""));
+    const media = visivel(profile, catalog.get(String(input.mediaId ?? "")));
     if (!media) { json(res, 404, { error: "Mídia não encontrada." }); return; }
     // Painel › Reprodução › Retomar: a porcentagem máxima decide quando o filme conta como assistido.
     json(res, 200, { progress: store.saveProgress(profile.username, media.id, Number(input.position), Number(input.duration), painel.limiteConcluido()) });
@@ -141,7 +148,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<voi
 
   const playbackMatch = url.pathname.match(/^\/api\/media\/([a-f0-9]{24})\/playback$/);
   if (playbackMatch && req.method === "POST") {
-    const media = catalog.get(playbackMatch[1]);
+    const media = visivel(profile, catalog.get(playbackMatch[1]));
     if (!media) { json(res, 404, { error: "Mídia não encontrada." }); return; }
     painel.registrarReproducao(profile, media);
     const request = await body<PlaybackRequest>(req);
@@ -159,14 +166,14 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<voi
 
   const directMatch = url.pathname.match(/^\/api\/media\/([a-f0-9]{24})\/stream$/);
   if (directMatch && req.method === "GET") {
-    const media = catalog.get(directMatch[1]);
+    const media = visivel(profile, catalog.get(directMatch[1]));
     if (!media) { json(res, 404, { error: "Mídia não encontrada." }); return; }
     streamFile(media.absolutePath, req.headers.range, res);
     return;
   }
   const subtitleMatch = url.pathname.match(/^\/api\/media\/([a-f0-9]{24})\/subtitles\/([a-f0-9]{24})\.vtt$/);
   if (subtitleMatch && req.method === "GET") {
-    const subtitle = catalog.get(subtitleMatch[1])?.subtitles.find((item) => item.id === subtitleMatch[2]);
+    const subtitle = visivel(profile, catalog.get(subtitleMatch[1]))?.subtitles.find((item) => item.id === subtitleMatch[2]);
     if (!subtitle) { json(res, 404, { error: "Legenda não encontrada." }); return; }
     res.writeHead(200, { "content-type": "text/vtt; charset=utf-8", "cache-control": "private, max-age=3600" });
     res.end(subtitleToVtt(subtitle.path));
@@ -174,7 +181,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<voi
   }
   const embeddedSubtitleMatch = url.pathname.match(/^\/api\/media\/([a-f0-9]{24})\/embedded-subtitles\/(\d+)\.vtt$/);
   if (embeddedSubtitleMatch && req.method === "GET") {
-    const media = catalog.get(embeddedSubtitleMatch[1]);
+    const media = visivel(profile, catalog.get(embeddedSubtitleMatch[1]));
     if (!media) { json(res, 404, { error: "Mídia não encontrada." }); return; }
     const technical = probe.analyze(media);
     const streamIndex = Number(embeddedSubtitleMatch[2]);

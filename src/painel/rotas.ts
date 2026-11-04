@@ -4,6 +4,8 @@ import fs from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { MediaItem, PugotiProfile } from "../types.js";
 import { BancoPainel } from "./banco.js";
+import { GerenciadorBibliotecas, TIPOS_BIBLIOTECA, usuarioPodeVer, type Biblioteca } from "./bibliotecas.js";
+import path from "node:path";
 import { Backups } from "./backups.js";
 import { ErroValidacao, PAGINAS, pagina } from "./configuracao.js";
 import { disco, infoServidor, montarPainel, type RegistroAtividade } from "./painel.js";
@@ -13,6 +15,7 @@ type Json = (res: ServerResponse, status: number, corpo: unknown) => void;
 type Corpo = <T>(req: IncomingMessage) => Promise<T>;
 export interface ContextoPainel {
   banco: BancoPainel; registros: Registros; backups: Backups; json: Json; corpo: Corpo;
+  bibliotecas: GerenciadorBibliotecas; raizesPermitidas: string[];
   catalogo: () => MediaItem[]; ultimaVarredura: () => string; atividadeProgresso: () => RegistroAtividade[];
   varrer: () => Promise<number>; atualizarMetadados: () => Promise<void>;
   intervaloMs: number; raizMidia: string; pastaDados: string; ffmpeg: string; versao: string;
@@ -52,6 +55,12 @@ export class RotasPainel {
     return this.c.banco.usuario(perfil.username)?.desativado ? "Sua conta está desativada neste servidor. Fale com o administrador." : null;
   }
 
+  /** Usuários › Acesso à biblioteca e Controle dos pais: administrador vê tudo. */
+  podeVer(perfil: PugotiProfile, item: MediaItem): boolean {
+    if (perfil.role === "admin") return true;
+    return usuarioPodeVer(this.c.banco.usuario(perfil.username), item as MediaItem & { bibliotecaId?: string });
+  }
+
   registrarReproducao(perfil: PugotiProfile, media: MediaItem): void {
     this.c.banco.registrar("VideoPlayback", `${perfil.displayName} está reproduzindo ${media.title}`, perfil.username);
   }
@@ -89,9 +98,13 @@ export class RotasPainel {
   private visaoGeral() {
     const geral = this.c.banco.ler("geral");
     const servidor = { ...infoServidor(this.c.versao, this.c.ffmpeg), nome: String(geral.ServerName) };
-    return montarPainel({ catalogo: this.c.catalogo(), ultimaVarredura: this.c.ultimaVarredura(), intervaloVarreduraMs: this.c.intervaloMs,
+    const visao = montarPainel({ catalogo: this.c.catalogo(), ultimaVarredura: this.c.ultimaVarredura(), intervaloVarreduraMs: this.c.intervaloMs,
       raizMidia: this.c.raizMidia, atividade: this.c.atividadeProgresso(), agora: new Date(), servidor,
       discos: [disco(this.c.raizMidia, "Mídia"), disco(this.c.pastaDados, "Dados do PugotiCine")] });
+    const tipos = Object.fromEntries(TIPOS_BIBLIOTECA.map(x => [x.valor, x.rotulo]));
+    visao.bibliotecas = this.c.bibliotecas.bibliotecas().map(b => ({ nome: b.nome, tipo: tipos[b.tipo], caminho: b.pastas.join(", "), itens: b.itens,
+      ultimaVarredura: b.ultimaVarredura, proximaVarredura: visao.bibliotecas[0]?.proximaVarredura ?? null }));
+    return visao;
   }
 
   private listaTarefas() {
@@ -218,10 +231,54 @@ export class RotasPainel {
         json(res, 200, { tarefas: this.listaTarefas() });
         return true;
       }
-      if (caminho === "/api/painel/bibliotecas" && metodo === "GET") { json(res, 200, { bibliotecas: this.visaoGeral().bibliotecas }); return true; }
+      // ---------- Bibliotecas (LibraryStructureController) ----------
+      const listaBibliotecas = () => ({ bibliotecas: this.c.bibliotecas.bibliotecas(), tipos: TIPOS_BIBLIOTECA, raizesPermitidas: this.c.raizesPermitidas });
+      if (caminho === "/api/painel/bibliotecas" && metodo === "GET") { json(res, 200, listaBibliotecas()); return true; }
+      if (caminho === "/api/painel/bibliotecas" && metodo === "POST") {
+        const b = this.c.bibliotecas.criar(await this.c.corpo<Partial<Biblioteca>>(req));
+        banco.registrar("LibraryCreated", `Biblioteca ${b.nome} adicionada`, perfil.username, b.pastas.join(", "));
+        json(res, 201, { biblioteca: b, ...listaBibliotecas() });
+        return true;
+      }
       if (caminho === "/api/painel/bibliotecas/rastrear" && metodo === "POST") {
         await this.executarTarefa("varredura");
-        json(res, 200, { bibliotecas: this.visaoGeral().bibliotecas });
+        json(res, 200, listaBibliotecas());
+        return true;
+      }
+      r = m(/^\/api\/painel\/bibliotecas\/([a-z0-9-]{1,40})(\/rastrear)?$/);
+      if (r) {
+        const id = r[1];
+        if (r[2] && metodo === "POST") {
+          const n = this.c.bibliotecas.varrer(id);
+          banco.registrar("LibraryScanned", `Biblioteca ${this.c.bibliotecas.biblioteca(id)?.nome} rastreada: ${n} item(ns)`, perfil.username);
+          json(res, 200, listaBibliotecas());
+          return true;
+        }
+        if (metodo === "PUT") {
+          const b = this.c.bibliotecas.atualizar(id, await this.c.corpo<Partial<Biblioteca>>(req));
+          banco.registrar("LibraryUpdated", `Biblioteca ${b.nome} alterada`, perfil.username);
+          json(res, 200, { biblioteca: b, ...listaBibliotecas() });
+          return true;
+        }
+        if (metodo === "DELETE") {
+          const nome = this.c.bibliotecas.biblioteca(id)?.nome;
+          this.c.bibliotecas.remover(id);
+          banco.registrar("LibraryDeleted", `Biblioteca ${nome} removida (os arquivos não foram apagados)`, perfil.username);
+          json(res, 200, listaBibliotecas());
+          return true;
+        }
+      }
+      // Seletor de pastas (o "Selecionar Diretório" do Jellyfin), só dentro das pastas de mídia permitidas.
+      if (caminho === "/api/painel/pastas" && metodo === "GET") {
+        const pedido = url.searchParams.get("caminho");
+        if (!pedido) { json(res, 200, { caminho: null, pai: null, pastas: this.c.raizesPermitidas.filter(r => fs.existsSync(r)) }); return true; }
+        const alvo = path.resolve(pedido);
+        if (!this.c.raizesPermitidas.some(raiz => alvo === raiz || alvo.startsWith(raiz + path.sep))) { json(res, 400, { error: "Fora das pastas de mídia permitidas." }); return true; }
+        let pastas: string[];
+        try { pastas = fs.readdirSync(alvo, { withFileTypes: true }).filter(e => e.isDirectory() && !e.name.startsWith(".")).map(e => path.join(alvo, e.name)).sort((a, b) => a.localeCompare(b, "pt-BR")); }
+        catch { json(res, 404, { error: "Pasta não encontrada." }); return true; }
+        const pai = this.c.raizesPermitidas.includes(alvo) ? null : path.dirname(alvo);
+        json(res, 200, { caminho: alvo, pai, pastas });
         return true;
       }
       json(res, 404, { error: "Rota do Painel não encontrada." });

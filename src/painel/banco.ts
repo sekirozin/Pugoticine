@@ -9,6 +9,8 @@ import { pagina, padroes, validar } from "./configuracao.js";
 export interface Usuario {
   usuario: string; nome: string; papel: "admin" | "user"; desativado: boolean; oculto: boolean;
   limiteBitrateMbps: number; maxSessoes: number; acessoSalas: "criar" | "participar" | "nenhum";
+  /** Usuários › Acesso à biblioteca e Controle dos pais (têm efeito no catálogo de quem não é administrador). */
+  todasBibliotecas: boolean; bibliotecas: string[]; classificacaoMaxima: number | null; bloquearSemClassificacao: boolean;
   primeiroAcesso: string; ultimoAcesso: string;
 }
 export interface Dispositivo { id: string; usuario: string; nome: string; aplicativo: string; ip: string; ultimoAcesso: string }
@@ -39,6 +41,9 @@ export class BancoPainel {
       CREATE TABLE IF NOT EXISTS atividade (id INTEGER PRIMARY KEY AUTOINCREMENT, data TEXT NOT NULL, tipo TEXT NOT NULL, nivel TEXT NOT NULL, usuario TEXT, nome TEXT NOT NULL, detalhe TEXT NOT NULL DEFAULT '');
       CREATE TABLE IF NOT EXISTS chaves (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, hash TEXT NOT NULL UNIQUE, prefixo TEXT NOT NULL, criadoEm TEXT NOT NULL, ultimoUso TEXT);
     `);
+    const colunas = (this.db.prepare("PRAGMA table_info(usuarios)").all() as { name: string }[]).map(c => c.name);
+    for (const [coluna, tipo] of [["todasBibliotecas", "INTEGER NOT NULL DEFAULT 1"], ["bibliotecas", "TEXT NOT NULL DEFAULT '[]'"], ["classificacaoMaxima", "INTEGER"], ["bloquearSemClassificacao", "INTEGER NOT NULL DEFAULT 0"]] as const)
+      if (!colunas.includes(coluna)) this.db.exec(`ALTER TABLE usuarios ADD COLUMN ${coluna} ${tipo}`);
   }
 
   // ---------- configuração ----------
@@ -84,9 +89,11 @@ export class BancoPainel {
   private paraUsuario(r: Record<string, unknown>): Usuario {
     return { usuario: String(r.usuario), nome: String(r.nome), papel: r.papel === "admin" ? "admin" : "user", desativado: Boolean(r.desativado), oculto: Boolean(r.oculto),
       limiteBitrateMbps: Number(r.limiteBitrateMbps), maxSessoes: Number(r.maxSessoes), acessoSalas: r.acessoSalas as Usuario["acessoSalas"],
-      primeiroAcesso: String(r.primeiroAcesso), ultimoAcesso: String(r.ultimoAcesso) };
+      todasBibliotecas: r.todasBibliotecas === undefined ? true : Boolean(r.todasBibliotecas), bibliotecas: JSON.parse(String(r.bibliotecas ?? "[]")),
+      classificacaoMaxima: r.classificacaoMaxima === null || r.classificacaoMaxima === undefined ? null : Number(r.classificacaoMaxima),
+      bloquearSemClassificacao: Boolean(r.bloquearSemClassificacao), primeiroAcesso: String(r.primeiroAcesso), ultimoAcesso: String(r.ultimoAcesso) };
   }
-  atualizarUsuario(usuario: string, dados: Partial<Pick<Usuario, "desativado" | "oculto" | "limiteBitrateMbps" | "maxSessoes" | "acessoSalas">>): Usuario {
+  atualizarUsuario(usuario: string, dados: Partial<Pick<Usuario, "desativado" | "oculto" | "limiteBitrateMbps" | "maxSessoes" | "acessoSalas" | "todasBibliotecas" | "bibliotecas" | "classificacaoMaxima" | "bloquearSemClassificacao">>): Usuario {
     const atual = this.usuario(usuario);
     if (!atual) throw new Error("Usuário não encontrado.");
     const novo = { ...atual };
@@ -95,8 +102,19 @@ export class BancoPainel {
     if (dados.limiteBitrateMbps !== undefined) { const n = Number(dados.limiteBitrateMbps); if (!Number.isFinite(n) || n < 0 || n > 1000) throw new Error("Limite do bitrate inválido (0 a 1000 Mbps)."); novo.limiteBitrateMbps = n; }
     if (dados.maxSessoes !== undefined) { const n = Number(dados.maxSessoes); if (!Number.isInteger(n) || n < 0 || n > 100) throw new Error("Número máximo de sessões inválido (0 a 100)."); novo.maxSessoes = n; }
     if (dados.acessoSalas !== undefined) { if (!["criar", "participar", "nenhum"].includes(dados.acessoSalas)) throw new Error("Acesso às salas inválido."); novo.acessoSalas = dados.acessoSalas; }
-    this.db.prepare("UPDATE usuarios SET desativado = ?, oculto = ?, limiteBitrateMbps = ?, maxSessoes = ?, acessoSalas = ? WHERE usuario = ?")
-      .run(novo.desativado ? 1 : 0, novo.oculto ? 1 : 0, novo.limiteBitrateMbps, novo.maxSessoes, novo.acessoSalas, usuario);
+    if (dados.todasBibliotecas !== undefined) { if (typeof dados.todasBibliotecas !== "boolean") throw new Error("Valor inválido."); novo.todasBibliotecas = dados.todasBibliotecas; }
+    if (dados.bibliotecas !== undefined) {
+      if (!Array.isArray(dados.bibliotecas) || dados.bibliotecas.some(b => typeof b !== "string" || !/^[a-z0-9-]{1,40}$/.test(b))) throw new Error("Bibliotecas inválidas.");
+      novo.bibliotecas = [...new Set(dados.bibliotecas)];
+    }
+    if (dados.classificacaoMaxima !== undefined) {
+      const v = dados.classificacaoMaxima === null || (dados.classificacaoMaxima as unknown) === "" ? null : Number(dados.classificacaoMaxima);
+      if (v !== null && ![0, 10, 12, 14, 16, 18].includes(v)) throw new Error("Classificação etária inválida.");
+      novo.classificacaoMaxima = v;
+    }
+    if (dados.bloquearSemClassificacao !== undefined) { if (typeof dados.bloquearSemClassificacao !== "boolean") throw new Error("Valor inválido."); novo.bloquearSemClassificacao = dados.bloquearSemClassificacao; }
+    this.db.prepare("UPDATE usuarios SET desativado = ?, oculto = ?, limiteBitrateMbps = ?, maxSessoes = ?, acessoSalas = ?, todasBibliotecas = ?, bibliotecas = ?, classificacaoMaxima = ?, bloquearSemClassificacao = ? WHERE usuario = ?")
+      .run(novo.desativado ? 1 : 0, novo.oculto ? 1 : 0, novo.limiteBitrateMbps, novo.maxSessoes, novo.acessoSalas, novo.todasBibliotecas ? 1 : 0, JSON.stringify(novo.bibliotecas), novo.classificacaoMaxima, novo.bloquearSemClassificacao ? 1 : 0, usuario);
     return novo;
   }
   excluirUsuario(usuario: string): void {

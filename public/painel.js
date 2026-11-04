@@ -247,6 +247,7 @@ async function telaVisaoGeral(alvo, cabecalho) {
 async function telaUsuarios(alvo, cabecalho) {
   const e = estado.f.escapeHtml;
   const { usuarios, voce } = await estado.f.api("/api/painel/usuarios");
+  estado.bibliotecas = (await estado.f.api("/api/painel/bibliotecas")).bibliotecas;
   alvo.innerHTML = cabecalho() + `<section class="painel-cartao"><div class="painel-usuarios">${usuarios.map((u) => `
     <button type="button" class="painel-usuario${u.desativado ? " desativado" : ""}" data-usuario="${e(u.usuario)}">
       <span class="painel-avatar">${e(u.nome.charAt(0).toUpperCase())}</span><strong>${e(u.nome)}</strong>
@@ -268,6 +269,14 @@ function editarUsuario(alvo, u, voce) {
     <label class="painel-campo"><span>Número máximo de sessões de usuários simultâneas</span><input type="number" name="maxSessoes" min="0" max="100" value="${u.maxSessoes}"></label>
     <label class="painel-campo"><span>Acesso às salas (SyncPlay)</span><select name="acessoSalas">${[["criar", "Permitir que o usuário crie e participe em grupos"], ["participar", "Permitir que o usuário participe de grupos"], ["nenhum", "Desativado para esse usuário"]].map(([v, r]) => `<option value="${v}" ${u.acessoSalas === v ? "selected" : ""}>${r}</option>`).join("")}</select></label>
     <small class="painel-ajuda">Ocultar, bitrate, sessões e salas: ainda não implementados no PugotiCine (são salvos).</small>
+    <h3>Acesso à Biblioteca</h3>
+    <label class="painel-campo painel-check"><input type="checkbox" name="todasBibliotecas" ${u.todasBibliotecas ? "checked" : ""}><span>Ativar o acesso a todas as bibliotecas</span></label>
+    <div class="painel-multipla" data-bibliotecas-usuario>${(estado.bibliotecas ?? []).map((b) => `<label class="painel-check"><input type="checkbox" value="${e(b.id)}" ${u.bibliotecas.includes(b.id) ? "checked" : ""}><span>${e(b.nome)}</span></label>`).join("")}</div>
+    <small class="painel-ajuda">Selecione as bibliotecas para compartilhar com este usuário. Tem efeito: o usuário só vê e só abre o que estiver liberado (administradores veem tudo).</small>
+    <h3>Classificações Etárias</h3>
+    <label class="painel-campo"><span>Classificação etária máxima permitida</span><select name="classificacaoMaxima">${[["", "Sem limite"], ["0", "Livre"], ["10", "10 anos"], ["12", "12 anos"], ["14", "14 anos"], ["16", "16 anos"], ["18", "18 anos"]].map(([v, r]) => `<option value="${v}" ${String(u.classificacaoMaxima ?? "") === v ? "selected" : ""}>${r}</option>`).join("")}</select></label>
+    <small class="painel-ajuda">Conteúdo com classificação maior será ocultado do usuário (pela classificação do Radarr, ex.: PG-13 = 13 anos).</small>
+    <label class="painel-campo painel-check"><input type="checkbox" name="bloquearSemClassificacao" ${u.bloquearSemClassificacao ? "checked" : ""}><span>Bloquear itens com avaliação desconhecida ou sem avaliação</span></label>
     <div class="painel-acoes"><button type="submit" class="painel-botao primario">Salvar</button><button type="button" class="painel-botao" data-cancelar>Cancelar</button>${u.usuario !== voce ? '<button type="button" class="painel-botao perigo" data-excluir-usuario>Excluir Usuário</button>' : ""}<span class="painel-status" data-painel-status></span></div></section></form>`;
   const form = area.querySelector("form");
   form.querySelector("[data-cancelar]").addEventListener("click", () => { area.innerHTML = ""; });
@@ -278,7 +287,9 @@ function editarUsuario(alvo, u, voce) {
   });
   form.addEventListener("submit", async (ev) => {
     ev.preventDefault();
-    const dados = { oculto: form.oculto.checked, limiteBitrateMbps: form.limiteBitrateMbps.value, maxSessoes: form.maxSessoes.value, acessoSalas: form.acessoSalas.value };
+    const dados = { oculto: form.oculto.checked, limiteBitrateMbps: form.limiteBitrateMbps.value, maxSessoes: form.maxSessoes.value, acessoSalas: form.acessoSalas.value,
+      todasBibliotecas: form.todasBibliotecas.checked, bibliotecas: [...form.querySelectorAll("[data-bibliotecas-usuario] input:checked")].map((i) => i.value),
+      classificacaoMaxima: form.classificacaoMaxima.value === "" ? null : Number(form.classificacaoMaxima.value), bloquearSemClassificacao: form.bloquearSemClassificacao.checked };
     if (!form.desativado.disabled) dados.desativado = form.desativado.checked;
     const r = await fetch(`/api/painel/usuarios/${encodeURIComponent(u.usuario)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(dados) });
     const corpo = await r.json();
@@ -289,13 +300,77 @@ function editarUsuario(alvo, u, voce) {
 
 async function telaBibliotecas(alvo, cabecalho) {
   const e = estado.f.escapeHtml;
-  const { bibliotecas } = await estado.f.api("/api/painel/bibliotecas");
-  alvo.innerHTML = cabecalho(`<div class="painel-acoes-topo"><button type="button" class="painel-botao" disabled title="Ainda não implementado no PugotiCine">Adicionar Biblioteca de Mídia</button><button type="button" class="painel-botao primario" data-rastrear>Rastrear Todas as Bibliotecas</button></div>`)
-    + `<div class="painel-bibliotecas">${bibliotecas.map((b) => `<section class="painel-cartao painel-biblioteca-cartao"><div class="painel-biblioteca-icone">${icone("Bibliotecas")}</div><h3>${e(b.nome)}</h3><code>${e(b.caminho)}</code><span>${b.itens} itens · tipo de conteúdo: Filmes</span><span>Última varredura ${e(relativo(b.ultimaVarredura))}</span></section>`).join("")}</div>`;
+  const dados = await estado.f.api("/api/painel/bibliotecas");
+  const tipo = (v) => dados.tipos.find((x) => x.valor === v)?.rotulo ?? v;
+  alvo.innerHTML = cabecalho(`<div class="painel-acoes-topo"><button type="button" class="painel-botao" data-adicionar-biblioteca>Adicionar Biblioteca de Mídia</button><button type="button" class="painel-botao primario" data-rastrear>Rastrear Todas as Bibliotecas</button></div>`)
+    + `<div data-editor-biblioteca></div><div class="painel-bibliotecas">${dados.bibliotecas.map((b) => `<section class="painel-cartao painel-biblioteca-cartao${b.ativa ? "" : " inativa"}" data-biblioteca="${e(b.id)}">
+      <div class="painel-biblioteca-icone">${icone("Bibliotecas")}</div><h3>${e(b.nome)}</h3><span>${e(tipo(b.tipo))} · ${b.itens} itens${b.ativa ? "" : " · desativada"}${b.monitorar ? " · monitorada" : ""}</span>
+      ${b.pastas.map((p) => `<code>${e(p)}</code>`).join("")}<span>Última varredura ${e(relativo(b.ultimaVarredura))}</span>
+      <div class="painel-acoes-linha"><button type="button" class="painel-botao pequeno" data-rastrear-biblioteca="${e(b.id)}">Rastrear biblioteca</button><button type="button" class="painel-botao pequeno" data-editar-biblioteca="${e(b.id)}">Editar</button><button type="button" class="painel-botao pequeno perigo" data-remover-biblioteca="${e(b.id)}">Remover</button></div></section>`).join("") || '<p class="painel-vazio">Nenhuma biblioteca.</p>'}</div>`;
   alvo.querySelector("[data-rastrear]").addEventListener("click", async (ev) => {
     ev.currentTarget.disabled = true; ev.currentTarget.textContent = "Rastreando...";
     await estado.f.api("/api/painel/bibliotecas/rastrear", { method: "POST", body: "{}" });
     estado.f.toast("Bibliotecas rastreadas.");
+    mostrarPagina();
+  });
+  alvo.querySelectorAll("[data-rastrear-biblioteca]").forEach((b) => b.addEventListener("click", async () => {
+    b.disabled = true; b.textContent = "Rastreando...";
+    await estado.f.api(`/api/painel/bibliotecas/${b.dataset.rastrearBiblioteca}/rastrear`, { method: "POST", body: "{}" });
+    estado.f.toast("Biblioteca rastreada.");
+    mostrarPagina();
+  }));
+  alvo.querySelectorAll("[data-remover-biblioteca]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("Deseja realmente remover esta biblioteca? Os arquivos não serão apagados.")) return;
+    await fetch(`/api/painel/bibliotecas/${b.dataset.removerBiblioteca}`, { method: "DELETE" });
+    mostrarPagina();
+  }));
+  alvo.querySelector("[data-adicionar-biblioteca]").addEventListener("click", () => editarBiblioteca(alvo, dados, null));
+  alvo.querySelectorAll("[data-editar-biblioteca]").forEach((b) => b.addEventListener("click", () => editarBiblioteca(alvo, dados, dados.bibliotecas.find((x) => x.id === b.dataset.editarBiblioteca))));
+}
+
+function editarBiblioteca(alvo, dados, b) {
+  const e = estado.f.escapeHtml;
+  const area = alvo.querySelector("[data-editor-biblioteca]");
+  const pastas = [...(b?.pastas ?? [])];
+  area.innerHTML = `<form class="painel-form painel-cartao" data-form-biblioteca><h3>${b ? `Editar: ${e(b.nome)}` : "Adicionar Biblioteca de Mídia"}</h3>
+    <label class="painel-campo"><span>Tipo de conteúdo</span><select name="tipo">${dados.tipos.map((t) => `<option value="${t.valor}" ${(b?.tipo ?? "movies") === t.valor ? "selected" : ""}>${e(t.rotulo)}</option>`).join("")}</select></label>
+    <label class="painel-campo"><span>Nome para exibição</span><input name="nome" maxlength="80" value="${e(b?.nome ?? "")}"></label>
+    <div class="painel-campo"><span>Pastas</span><div data-lista-pastas></div><button type="button" class="painel-botao pequeno" data-escolher-pasta>Adicionar pasta</button><div data-seletor-pasta></div></div>
+    <small class="painel-ajuda">Pastas permitidas: ${dados.raizesPermitidas.map(e).join(", ")}.</small>
+    <h3>Opções da biblioteca</h3>
+    <label class="painel-campo painel-check"><input type="checkbox" name="ativa" ${b?.ativa ?? true ? "checked" : ""}><span>Ativar esta biblioteca</span></label>
+    <label class="painel-campo painel-check"><input type="checkbox" name="monitorar" ${b?.monitorar ? "checked" : ""}><span>Ativar monitoramento em tempo real</span></label><small class="painel-ajuda">As alterações nos arquivos serão processadas imediatamente em sistemas de arquivos suportados.</small>
+    <label class="painel-campo"><span>Idioma preferido de download</span><select name="idiomaMetadados">${[["pt", "Português"], ["en", "English"], ["es", "Español"], ["ja", "日本語"]].map(([v, r]) => `<option value="${v}" ${(b?.idiomaMetadados ?? "pt") === v ? "selected" : ""}>${r}</option>`).join("")}</select></label>
+    <label class="painel-campo"><span>País/Região</span><select name="paisMetadados">${[["BR", "Brasil"], ["PT", "Portugal"], ["US", "Estados Unidos"], ["JP", "Japão"]].map(([v, r]) => `<option value="${v}" ${(b?.paisMetadados ?? "BR") === v ? "selected" : ""}>${r}</option>`).join("")}</select></label>
+    <label class="painel-campo"><span>Atualizar automaticamente os metadados da internet</span><select name="intervaloAtualizacaoDias">${[[0, "Nunca"], [30, "A cada 30 dias"], [60, "A cada 60 dias"], [90, "A cada 90 dias"]].map(([v, r]) => `<option value="${v}" ${(b?.intervaloAtualizacaoDias ?? 0) === v ? "selected" : ""}>${r}</option>`).join("")}</select></label>
+    <small class="painel-ajuda">Idioma, país e atualização automática: ainda não implementados no PugotiCine (são salvos).</small>
+    <div class="painel-acoes"><button type="submit" class="painel-botao primario">${b ? "Salvar" : "Adicionar"}</button><button type="button" class="painel-botao" data-cancelar>Cancelar</button><span class="painel-status" data-painel-status></span></div></form>`;
+  const form = area.querySelector("form");
+  const desenharPastas = () => {
+    form.querySelector("[data-lista-pastas]").innerHTML = pastas.length
+      ? pastas.map((p, i) => `<div class="painel-pasta"><code>${e(p)}</code><button type="button" class="painel-botao pequeno perigo" data-tirar-pasta="${i}">Remover</button></div>`).join("")
+      : '<p class="painel-vazio">Nenhuma pasta.</p>';
+    form.querySelectorAll("[data-tirar-pasta]").forEach((x) => x.addEventListener("click", () => { pastas.splice(Number(x.dataset.tirarPasta), 1); desenharPastas(); }));
+  };
+  desenharPastas();
+  const seletor = form.querySelector("[data-seletor-pasta]");
+  const navegar = async (caminho) => {
+    const r = await estado.f.api(`/api/painel/pastas${caminho ? `?caminho=${encodeURIComponent(caminho)}` : ""}`);
+    seletor.innerHTML = `<div class="painel-seletor"><div class="painel-seletor-topo"><strong>${e(r.caminho ?? "Pastas de mídia")}</strong>${r.caminho ? `<button type="button" class="painel-botao pequeno primario" data-usar-pasta>Selecionar esta pasta</button>` : ""}</div>
+      ${r.pai || r.caminho ? `<button type="button" class="painel-seletor-item" data-ir-pasta="${e(r.pai ?? "")}">⬑ Subir</button>` : ""}${r.pastas.map((p) => `<button type="button" class="painel-seletor-item" data-ir-pasta="${e(p)}">📁 ${e(p.split("/").pop())}</button>`).join("") || '<p class="painel-vazio">Sem subpastas.</p>'}</div>`;
+    seletor.querySelectorAll("[data-ir-pasta]").forEach((x) => x.addEventListener("click", () => navegar(x.dataset.irPasta)));
+    seletor.querySelector("[data-usar-pasta]")?.addEventListener("click", () => { if (!pastas.includes(r.caminho)) pastas.push(r.caminho); seletor.innerHTML = ""; desenharPastas(); });
+  };
+  form.querySelector("[data-escolher-pasta]").addEventListener("click", () => navegar(null));
+  form.querySelector("[data-cancelar]").addEventListener("click", () => { area.innerHTML = ""; });
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const corpo = { nome: form.nome.value, tipo: form.tipo.value, pastas, ativa: form.ativa.checked, monitorar: form.monitorar.checked,
+      idiomaMetadados: form.idiomaMetadados.value, paisMetadados: form.paisMetadados.value, intervaloAtualizacaoDias: Number(form.intervaloAtualizacaoDias.value) };
+    const r = await fetch(b ? `/api/painel/bibliotecas/${b.id}` : "/api/painel/bibliotecas", { method: b ? "PUT" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(corpo) });
+    const resposta = await r.json();
+    if (!r.ok) { form.querySelector("[data-painel-status]").textContent = resposta.error; return; }
+    estado.f.toast(b ? "Biblioteca salva." : "Biblioteca adicionada.");
     mostrarPagina();
   });
 }
