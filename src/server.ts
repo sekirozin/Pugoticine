@@ -126,6 +126,9 @@ function publicMedia(profile: PugotiProfile) {
     }
   }));
 }
+function bibliotecasVisiveis(profile: PugotiProfile) {
+  return catalog.bibliotecas().filter((b) => b.ativa && painel.podeVerBiblioteca(profile, b.id)).map(({ id, nome, tipo }) => ({ id, nome, tipo }));
+}
 function visivel<T extends { id: string }>(profile: PugotiProfile, media: T | null): T | null {
   return media && painel.podeVer(profile, metadata.enrich(media as never)) ? media : null;
 }
@@ -141,7 +144,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<voi
   if (await salas.tratar(req, res, url, profile)) return;
 
   if (url.pathname === "/api/bootstrap" && req.method === "GET") {
-    json(res, 200, { profile, media: publicMedia(profile), progress: store.listProgress(profile.username), lastScanAt });
+    json(res, 200, { profile, media: publicMedia(profile), bibliotecas: bibliotecasVisiveis(profile), progress: store.listProgress(profile.username), lastScanAt });
     return;
   }
   if (url.pathname === "/api/catalog/scan" && req.method === "POST") {

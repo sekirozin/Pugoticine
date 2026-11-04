@@ -22,7 +22,21 @@ export interface Biblioteca {
   id: string; nome: string; tipo: TipoBiblioteca; pastas: string[]; ativa: boolean; monitorar: boolean;
   idiomaMetadados: string; paisMetadados: string; intervaloAtualizacaoDias: number; criadaEm: string; ultimaVarredura: string | null;
 }
-export type ItemBiblioteca = MediaItem & { bibliotecaId: string; bibliotecaNome: string };
+/** Episódio de série (como Series › Season › Episode do Jellyfin); o id da série é estável por biblioteca + nome. */
+export interface InfoSerie { id: string; nome: string; temporada: number; episodio: number; episodioFinal: number | null; nomeEpisodio: string | null }
+export type ItemBiblioteca = MediaItem & { bibliotecaId: string; bibliotecaNome: string; bibliotecaTipo: TipoBiblioteca; serie?: InfoSerie };
+
+/** Nome do episódio a partir do arquivo: o texto entre "S01E04" e a qualidade/fonte ("1080p", "WEB-DL"...). */
+export function nomeDoEpisodioNoArquivo(arquivo: string): string | null {
+  const base = path.basename(arquivo, path.extname(arquivo));
+  const marca = base.match(/S\d{1,2}E\d{1,4}(?:-?E\d{1,4})?/i);
+  if (!marca || marca.index === undefined) return null;
+  let resto = base.slice(marca.index + marca[0].length);
+  const corte = resto.search(/(?:^|[ ._\-\[(])(?:\d{3,4}p|(?:19|20)\d{2}|WEB|WEBRip|WEB-DL|CR|AMZN|NF|DSNP|HMAX|BluRay|BDRip|HDTV|DVDRip|x26[45]|H\.?26[45]|HEVC|AVC|AAC|DDP?|DUAL|MULTI|ENG|JAP|ITA)(?:[ ._\-\])]|$)/i);
+  if (corte >= 0) resto = resto.slice(0, corte);
+  const nome = resto.replace(/[._]+/g, " ").replace(/^[\s\-–:]+|[\s\-–:]+$/g, "").replace(/\s{2,}/g, " ").trim();
+  return nome.length >= 2 ? nome : null;
+}
 
 const ID_PADRAO = "filmes";
 
@@ -83,7 +97,7 @@ export class GerenciadorBibliotecas {
         for (const original of new Catalog(pasta).scan()) {
           // Primeira pasta da biblioteca padrão: o ID de sempre. As demais: ID derivado (mesmo formato de 24 hex).
           const id = b.id === ID_PADRAO && indice === 0 ? original.id : crypto.createHash("sha256").update(`${b.id}:${indice}:${original.id}`).digest("hex").slice(0, 24);
-          const item: ItemBiblioteca = { ...original, id, bibliotecaId: b.id, bibliotecaNome: b.nome };
+          const item: ItemBiblioteca = { ...original, id, bibliotecaId: b.id, bibliotecaNome: b.nome, bibliotecaTipo: b.tipo };
           if (b.tipo === "tvshows" || b.tipo === "mixed") this.nomearEpisodio(item, pasta);
           if (this.itens.has(id)) { console.warn(`Biblioteca ${b.nome}: ${original.relativePath} repetido, ignorado.`); continue; }
           this.itens.set(id, item);
@@ -99,6 +113,10 @@ export class GerenciadorBibliotecas {
     const primeiraPasta = item.relativePath.split(/[\\/]/)[0];
     const serie = item.relativePath.includes("/") ? nomeDaSerie(path.join(raiz, primeiraPasta)) : (ep.serie || item.title);
     const temporada = ep.temporada ?? 1;
+    item.serie = {
+      id: crypto.createHash("sha256").update(`${item.bibliotecaId}:serie:${serie.toLocaleLowerCase("pt-BR")}`).digest("hex").slice(0, 24),
+      nome: serie, temporada, episodio: ep.episodio, episodioFinal: ep.episodioFinal ?? null, nomeEpisodio: nomeDoEpisodioNoArquivo(item.absolutePath)
+    };
     item.title = `${serie} · T${temporada}E${String(ep.episodio).padStart(2, "0")}${ep.episodioFinal ? `-E${String(ep.episodioFinal).padStart(2, "0")}` : ""}`;
     item.year = null;
   }

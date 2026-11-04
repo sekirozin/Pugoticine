@@ -55,7 +55,7 @@ try {
 
   // Escanear: a varredura roda e o Painel volta atualizado.
   const antes = await admin.evaluate(async () => (await (await fetch("/api/painel")).json()).bibliotecas[0].ultimaVarredura);
-  await admin.locator("[data-painel-varrer]").click();
+  await admin.locator("[data-painel-varrer]").first().click();
   await admin.waitForFunction(() => document.querySelector("#toast") && !document.querySelector("#toast").hidden && /Biblioteca atualizada/.test(document.querySelector("#toast").textContent), null, { timeout: 30000 });
   const depois = await admin.evaluate(async () => (await (await fetch("/api/painel")).json()).bibliotecas[0].ultimaVarredura);
   assert.ok(Date.parse(depois) > Date.parse(antes), "nova varredura registrada");

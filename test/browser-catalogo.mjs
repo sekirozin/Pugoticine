@@ -25,11 +25,15 @@ try {
   assert.equal(await page.locator(".destaque .botao-assistir").count(), 1);
   assert.equal(await page.locator(".destaque .botao-info").count(), 1);
   const fileiras = await page.locator(".fileira h2").allTextContents();
-  assert.ok(fileiras.includes("Adicionados recentemente") && fileiras.includes("Todos os filmes"), JSON.stringify(fileiras));
+  assert.ok(fileiras.includes("Adicionados recentemente em Filmes"), JSON.stringify(fileiras));
   // Desempenho: só o que aparece na tela, em WebP e no tamanho padronizado.
   const totalCartoes = await page.locator(".titulo-img").count();
   const pedidas = imagens.filter((i) => i.url.includes("poster") || i.url.includes("fundo"));
-  assert.ok(pedidas.length < totalCartoes + 1, `carregou ${pedidas.length} imagens para ${totalCartoes} cartões (só as visíveis)`);
+  // Imagens bem abaixo da tela (mais de 2 telas) não podem ter sido baixadas (loading=lazy).
+  const longe = await page.evaluate(() => [...document.querySelectorAll(".titulo-img")].filter((i) => i.getBoundingClientRect().top > innerHeight * 2).map((i) => i.currentSrc || i.src));
+  const baixadasLonge = longe.filter((src) => pedidas.some((p) => p.url === src));
+  assert.deepEqual(baixadasLonge, [], "imagens fora da tela não são baixadas");
+  assert.ok(pedidas.length <= totalCartoes + 1, `carregou ${pedidas.length} imagens para ${totalCartoes} cartões + destaque`);
   assert.ok(pedidas.every((i) => i.status === 200 && i.tipo === "image/webp" && /immutable/.test(i.cache)), JSON.stringify(pedidas.slice(0, 2)));
   assert.ok(pedidas.every((i) => /[?&]l=(185|342|500|780|1280|1920)\b/.test(i.url)));
   console.log(`primeiro carregamento: ${pedidas.length} imagens para ${totalCartoes} cartões`);
@@ -41,7 +45,7 @@ try {
   assert.deepEqual(rebaixadas, [], "imagem já baixada não é baixada de novo ao recarregar");
 
   // Detalhes: abre pelo cartão, fecha com Esc; Assistir abre o player.
-  const cartao = page.locator(".fileira").filter({ hasText: "Adicionados recentemente" }).locator(".titulo-capa").first();
+  const cartao = page.locator(".fileira").filter({ hasText: "Adicionados recentemente em Filmes" }).locator(".titulo-capa").first();
   await cartao.click();
   await page.waitForSelector(".detalhes");
   assert.match(await page.locator(".detalhes h3").textContent(), /Títulos parecidos|Mais títulos/);
@@ -56,7 +60,7 @@ try {
   await page.waitForFunction(() => document.querySelector("#player-modal").hidden);
 
   // Filmes: ordenar; busca.
-  await page.locator('[data-view="movies"]').click();
+  await page.locator("#nav-bibliotecas .nav-item", { hasText: "Filmes" }).click();
   await page.waitForSelector(".catalogo .grade");
   await page.locator('[data-filtro="ordem"]').selectOption("ano");
   const anos = await page.locator(".grade .titulo-meta em").allTextContents();

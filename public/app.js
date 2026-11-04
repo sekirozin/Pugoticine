@@ -5,6 +5,7 @@ import { renderCatalogo } from "/inicio.js";
 const state = {
   profile: null,
   media: [],
+  bibliotecas: [],
   progress: new Map(),
   view: "home",
   query: "",
@@ -67,7 +68,7 @@ function renderPainelView() {
     aoVarrer: (media) => { state.media = media; },
     aoMudarMarca: aplicarMarca,
     // Cabeçalho do menu do Painel: volta ao app (o menu lateral normal reaparece).
-    voltarAoInicio: () => { state.view = "home"; state.query = ""; updateNavigation(); render(); },
+    voltarAoInicio: () => { state.view = "home"; state.query = ""; updateNavigation(); render(); recarregarCatalogo(); },
     fecharMenu: () => { if (innerWidth <= 700) toggleMenu(false); }
   });
 }
@@ -87,7 +88,32 @@ function render() {
   if (state.view === "painel") { renderPainelView(); return; }
   fecharPainel();
   // Catálogo no estilo de streaming (public/inicio.js): destaque, fileiras, cartões e janela de detalhes.
-  renderCatalogo(content, { media: state.media, view: state.view, query: state.query, progressFor, abrirPlayer: openPlayer, escapeHtml });
+  renderCatalogo(content, { media: state.media, bibliotecas: state.bibliotecas, view: state.view, query: state.query, progressFor, abrirPlayer: openPlayer, escapeHtml });
+}
+
+// Menu lateral: uma entrada por biblioteca, com o ícone do tipo (como "Minha mídia" do Jellyfin).
+const ICONES_BIBLIOTECA = {
+  movies: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="m7 5 2-3m4 3 2-3m4 3 2-3M3 10h18"/>',
+  tvshows: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="m8 2 4 4 4-4"/>',
+  mixed: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="m8 2 4 4 4-4M10 10l5 2.5-5 2.5z"/>',
+  outro: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
+};
+function renderNavBibliotecas() {
+  const lista = $("#nav-bibliotecas");
+  if (!lista) return;
+  lista.innerHTML = state.bibliotecas.map((b) => `<button class="nav-item" data-view="biblioteca:${escapeHtml(b.id)}" title="${escapeHtml(b.nome)}"><svg viewBox="0 0 24 24">${ICONES_BIBLIOTECA[b.tipo] ?? ICONES_BIBLIOTECA.outro}</svg><span>${escapeHtml(b.nome)}</span></button>`).join("");
+  if (state.view === "movies") state.view = `biblioteca:${state.bibliotecas.find((b) => b.tipo === "movies")?.id ?? "filmes"}`;
+  if (state.view.startsWith("biblioteca:") && !state.bibliotecas.some((b) => `biblioteca:${b.id}` === state.view)) state.view = "home";
+  updateNavigation();
+}
+/** Recarrega mídias e bibliotecas (ex.: ao sair do Painel depois de mexer nas bibliotecas). */
+async function recarregarCatalogo() {
+  try {
+    const data = await api("/api/bootstrap");
+    state.media = data.media; state.bibliotecas = data.bibliotecas ?? [];
+    state.progress = new Map(data.progress.map((item) => [item.mediaId, item]));
+    renderNavBibliotecas(); render();
+  } catch { /* mantém o que já está na tela */ }
 }
 
 function updateNavigation() {
@@ -364,6 +390,8 @@ async function bootstrap() {
     const data = await api("/api/bootstrap");
     state.profile = data.profile;
     state.media = data.media;
+    state.bibliotecas = data.bibliotecas ?? [];
+    renderNavBibliotecas();
     state.progress = new Map(data.progress.map((item) => [item.mediaId, item]));
     $("#profile-name").textContent = data.profile.nickname || data.profile.displayName;
     $("#profile-username").textContent = `@${data.profile.username}`;
@@ -387,10 +415,13 @@ async function bootstrap() {
 $("#menu-toggle").addEventListener("click", () => toggleMenu());
 scrim.addEventListener("click", () => toggleMenu(false));
 $("#brand").addEventListener("click", () => { state.view = "home"; state.query = ""; $("#search").value = ""; updateNavigation(); render(); });
-document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => {
+// Delegação: as entradas das bibliotecas são criadas depois de carregar.
+$("#sidebar").addEventListener("click", (event) => {
+  const button = event.target.closest("nav [data-view]");
+  if (!button) return;
   state.view = button.dataset.view; state.query = ""; $("#search").value = ""; updateNavigation();
   if (innerWidth <= 700) toggleMenu(false); render();
-}));
+});
 $("#search").addEventListener("input", (event) => { state.query = event.target.value; render(); });
 $("#profile-button").addEventListener("click", () => { $("#profile-menu").hidden = !$("#profile-menu").hidden; });
 $("#profile-open")?.addEventListener("click", (event) => { event.preventDefault(); location.assign(`https://pugotilab.com/auth/profile?return=${encodeURIComponent(window.location.href)}`); });

@@ -8,7 +8,7 @@ import path from "node:path";
 import test from "node:test";
 import Database from "better-sqlite3";
 import { Catalog } from "../catalog.js";
-import { GerenciadorBibliotecas, idadeDaClassificacao, usuarioPodeVer } from "./bibliotecas.js";
+import { GerenciadorBibliotecas, idadeDaClassificacao, nomeDoEpisodioNoArquivo, usuarioPodeVer } from "./bibliotecas.js";
 
 const raiz = fs.mkdtempSync(path.join(os.tmpdir(), "bibliotecas-"));
 const arquivo = (rel: string) => { const f = path.join(raiz, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, "x"); };
@@ -71,4 +71,29 @@ test("PQA-235: acesso por biblioteca e classificação etária (UserPolicy)", ()
   assert.equal(usuarioPodeVer({ ...livre, bloquearSemClassificacao: true }, filme("filmes")), false);
   assert.equal(usuarioPodeVer({ ...livre, classificacaoMaxima: 10 }, filme("filmes")), true, "sem classificação só bloqueia se marcado");
   assert.deepEqual(["G", "PG", "PG-13", "R", "NC-17", "TV-MA", "L", "BR-14", "NR", ""].map(idadeDaClassificacao), [0, 10, 13, 17, 18, 17, 0, 14, null, null]);
+});
+
+// PQA-225: Filmes, Séries e Animes separados como no Jellyfin — cada item diz sua biblioteca e o tipo; episódios
+// trazem série (id estável), temporada, número e nome do episódio tirado do arquivo.
+test("PQA-225: itens com biblioteca/tipo e episódios agrupáveis por série", () => {
+  const g = novo(); g.scan();
+  const animes = g.criar({ nome: "Animes", tipo: "tvshows", pastas: [path.join(raiz, "Animes")] });
+  const filmes = g.list().filter(i => i.bibliotecaId === "filmes");
+  assert.ok(filmes.every(i => i.bibliotecaTipo === "movies" && !i.serie), "filmes sem série");
+  const eps = g.list().filter(i => i.bibliotecaId === animes.id).sort((a, b) => a.serie!.episodio - b.serie!.episodio);
+  assert.ok(eps.every(i => i.bibliotecaTipo === "tvshows" && i.bibliotecaNome === "Animes"));
+  assert.equal(new Set(eps.map(i => i.serie!.id)).size, 1, "mesma série");
+  assert.match(eps[0].serie!.id, /^[0-9a-f]{24}$/);
+  assert.deepEqual(eps.map(i => [i.serie!.nome, i.serie!.temporada, i.serie!.episodio, i.serie!.nomeEpisodio]),
+    [["Daemons of the Shadow Realm", 1, 1, null], ["Daemons of the Shadow Realm", 1, 4, "Jin and Yuru"]]);
+  const outra = novo(); outra.scan(); const a2 = outra.criar({ nome: "Animes", tipo: "tvshows", pastas: [path.join(raiz, "Animes")] });
+  assert.equal(outra.list().find(i => i.bibliotecaId === a2.id)?.serie?.id === eps[0].serie!.id, a2.id === animes.id, "id da série depende só da biblioteca e do nome");
+});
+
+test("PQA-225: nome do episódio a partir do arquivo", () => {
+  assert.equal(nomeDoEpisodioNoArquivo("Daemons.of.the.Shadow.Realm.S01E11.Big.Brother.and.Little.Brother.1080p.CR.WEB-DL.ENG.H264-kARiDo.mkv"), "Big Brother and Little Brother");
+  assert.equal(nomeDoEpisodioNoArquivo("Show.S01E10.Long-Arm.and.Long-Leg.1080p.mkv"), "Long-Arm and Long-Leg");
+  assert.equal(nomeDoEpisodioNoArquivo("Show (2026) S01E23 (1080p CR WEB-DL H264) [AnoZu].mkv"), null);
+  assert.equal(nomeDoEpisodioNoArquivo("Show.2026.S01E14.1080p.CR.WEB-DL.mkv"), null);
+  assert.equal(nomeDoEpisodioNoArquivo("[SubsPlease] Show - 18 (1080p) [40D7BDB9].mkv"), null);
 });

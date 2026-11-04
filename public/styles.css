@@ -163,3 +163,25 @@ body.modo-painel .painel-app{display:block}body.modo-painel .painel-menu{positio
 .painel-link{border:0;background:none;color:var(--text);padding:0;cursor:pointer;text-align:left;font:inherit}.painel-link:hover strong{text-decoration:underline}
 .painel-campo[hidden]{display:none}
 .painel-aviso-restauracao{border-color:#c99a2e}
+
+/* ===== Bibliotecas e séries (Filmes / Séries / Animes, como no Jellyfin) ===== */
+.nav-bibliotecas{display:grid;gap:5px}
+.titulo-selo{position:absolute;top:8px;right:8px;z-index:2;min-width:26px;height:26px;padding:0 7px;display:grid;place-items:center;border-radius:13px;background:rgba(38,61,187,.92);font-size:12.5px;font-weight:800;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+.detalhes-corpo-serie{grid-template-columns:1fr;padding-bottom:4px}
+.temporadas{padding:0 clamp(18px,4vw,48px) 24px}
+.temporadas-abas{display:flex;gap:8px;overflow-x:auto;padding-bottom:12px;margin-bottom:6px;border-bottom:1px solid #2a2a2a;scrollbar-width:none}
+.temporada-aba{flex:0 0 auto;height:38px;padding:0 16px;border:1px solid #3a3a3a;border-radius:19px;background:transparent;color:#ddd;font-weight:650;cursor:pointer}
+.temporada-aba:hover{border-color:#777}
+.temporada-aba.ativa{background:#fff;border-color:#fff;color:#000}
+.episodios{display:grid}
+.episodio{display:grid;grid-template-columns:clamp(130px,26%,220px) minmax(0,1fr);gap:16px;align-items:center;padding:12px 8px;border-bottom:1px solid #262626;border-radius:6px}
+.episodio:hover{background:#222}
+.episodio-capa{position:relative;aspect-ratio:16/9;width:100%;padding:0;border:0;border-radius:6px;overflow:hidden;background:linear-gradient(145deg,#1c2150,#0d0d12 70%);cursor:pointer;color:#fff}
+.episodio-play{position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.25);opacity:0;transition:opacity .2s ease}
+.episodio-play .icone-cheio{width:44px;height:44px;padding:8px;border:2px solid #fff;border-radius:50%;background:rgba(0,0,0,.5)}
+.episodio-capa:hover .episodio-play,.episodio-capa:focus-visible .episodio-play{opacity:1}
+.episodio-capa:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.episodio-info h4{margin:0 0 6px;font-size:16px;line-height:1.3}.episodio-info h4 span{color:#9a9a9a;margin-right:4px}
+.episodio-info p{margin:0;color:#a3a3a3;font-size:13.5px}
+.episodio.visto .episodio-info h4{color:#bdbdbd}
+@media(max-width:700px){.episodio{grid-template-columns:42% minmax(0,1fr);gap:12px;padding:10px 0}.episodio-info h4{font-size:14.5px}}

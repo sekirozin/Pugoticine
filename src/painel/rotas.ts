@@ -81,6 +81,13 @@ export class RotasPainel {
     return this.filtroRede(req.socket.remoteAddress ?? "", req.headers["x-forwarded-for"]);
   }
 
+  /** Bibliotecas que aparecem para a pessoa (menu lateral e Início), pelo acesso do Painel › Usuários. */
+  podeVerBiblioteca(perfil: PugotiProfile, id: string): boolean {
+    if (perfil.role === "admin") return true;
+    const u = this.c.banco.usuario(perfil.username);
+    return !u || u.todasBibliotecas || u.bibliotecas.includes(id);
+  }
+
   podeVer(perfil: PugotiProfile, item: MediaItem): boolean {
     if (perfil.role === "admin") return true;
     return usuarioPodeVer(this.c.banco.usuario(perfil.username), item as MediaItem & { bibliotecaId?: string });
