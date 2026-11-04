@@ -147,8 +147,19 @@ function browserCapabilities(forceUniversal = false) {
   };
 }
 
+/** "Português · FORÇADA PT-BR · embutida": nome da faixa (ou "Forçada"/"SDH") para diferenciar faixas do mesmo idioma. */
+function rotuloLegendaEmbutida(track) {
+  const partes = [languageLabel(track.language)];
+  const titulo = String(track.title || "").trim();
+  if (titulo && titulo.toLocaleLowerCase("pt-BR") !== partes[0].toLocaleLowerCase("pt-BR")) partes.push(titulo);
+  if (track.forced && !/for[cç]ad|forced/i.test(titulo)) partes.push("Forçada");
+  partes.push(track.kind === "bitmap" ? "embutida (imagem)" : "embutida");
+  return partes.join(" · ");
+}
+
 function languageLabel(language) {
-  const labels = { por: "Português", pob: "Português (Brasil)", "pt-br": "Português (Brasil)", eng: "English", en: "English", jpn: "Japonês", spa: "Espanhol" };
+  const labels = { por: "Português", pob: "Português (Brasil)", "pt-br": "Português (Brasil)", eng: "Inglês", en: "Inglês", jpn: "Japonês", spa: "Espanhol",
+    fre: "Francês", fra: "Francês", ger: "Alemão", deu: "Alemão", ita: "Italiano", rus: "Russo", chi: "Chinês", zho: "Chinês", ara: "Árabe", und: "Indefinido" };
   return labels[String(language || "").toLowerCase()] || String(language || "Indefinido").toUpperCase();
 }
 
@@ -163,7 +174,7 @@ function populateTrackControls(media, technical) {
   }
   if (!subtitle.dataset.ready) {
     const external = media.subtitles.map((track) => `<option value="external:${track.id}"${track.language === "pt-BR" ? " selected" : ""}>${escapeHtml(track.label)} · externa</option>`);
-    const embedded = technical.subtitleTracks.map((track) => `<option value="embedded:${track.streamIndex}">${escapeHtml(languageLabel(track.language))} · ${escapeHtml(track.codec.toUpperCase())}${track.kind === "bitmap" ? " · transcodificar" : ""}</option>`);
+    const embedded = technical.subtitleTracks.map((track) => `<option value="embedded:${track.streamIndex}">${escapeHtml(rotuloLegendaEmbutida(track))}</option>`);
     subtitle.innerHTML = [`<option value="none">Desativada</option>`, ...external, ...embedded].join("");
     subtitle.dataset.ready = "1";
   }
@@ -206,7 +217,7 @@ function addSelectedTextTrack(media, technical) {
     if (!source) return;
     const track = document.createElement("track");
     track.kind = "subtitles";
-    track.label = languageLabel(source.language);
+    track.label = rotuloLegendaEmbutida(source);
     track.srclang = source.language;
     track.src = `/api/media/${media.id}/embedded-subtitles/${source.streamIndex}.vtt`;
     track.default = true;

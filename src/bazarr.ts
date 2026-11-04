@@ -23,6 +23,8 @@ export type OpcoesBazarr = {
  */
 export class LegendasBazarr {
   private arquivos = new Map<string, string>();
+  /** Legendas que apareceram no histórico desde a sincronização anterior (para varrer a biblioteca na hora). */
+  novas: string[] = [];
   private readonly busca: Busca;
   constructor(private readonly opcoes: OpcoesBazarr) {
     this.busca = opcoes.busca ?? ((url, init) => fetch(url, init));
@@ -42,6 +44,7 @@ export class LegendasBazarr {
         if (local) novos.set(local, IDIOMAS[registro.language?.code2 ?? ""] ?? (registro.language?.code2 ?? "").toUpperCase());
       }
     }
+    this.novas = [...novos.keys()].filter((caminho) => !this.arquivos.has(caminho));
     this.arquivos = novos;
     return novos.size;
   }

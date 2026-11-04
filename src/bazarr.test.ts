@@ -47,3 +47,18 @@ test("PQA-266: Bazarr fora do ar mantém os rótulos anteriores", async () => {
   const legenda = { id: "a", language: "pt-BR" as const, label: "x", path: "/media/Filmes/Interstellar (2014)/Interestelar.pt-BR.srt" };
   assert.equal(bazarr.rotular(legenda).label, "Bazarr - PT-BR");
 });
+
+test("PQA-267: legendas novas no histórico ficam em \"novas\" para o catálogo varrer na hora", async () => {
+  let registros = [{ action: 1, language: { code2: "pb" }, subtitles_path: "/jellyfin/Filmes/A (2020)/A.pt-BR.srt" }];
+  const bazarr = new LegendasBazarr({
+    url: "http://bazarr:6767", chave: "k", raizBazarr: "/jellyfin", raizLocal: "/media",
+    busca: async (url) => ({ ok: true, status: 200, json: async () => ({ data: url.includes("/api/movies/") ? registros : [] }) })
+  });
+  await bazarr.sincronizar();
+  assert.deepEqual(bazarr.novas, ["/media/Filmes/A (2020)/A.pt-BR.srt"]);
+  await bazarr.sincronizar();
+  assert.deepEqual(bazarr.novas, [], "a mesma legenda não dispara outra varredura");
+  registros = [...registros, { action: 1, language: { code2: "pb" }, subtitles_path: "/jellyfin/Filmes/B (2021)/B.pt-BR.srt" }];
+  await bazarr.sincronizar();
+  assert.deepEqual(bazarr.novas, ["/media/Filmes/B (2021)/B.pt-BR.srt"]);
+});

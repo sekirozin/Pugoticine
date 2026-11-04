@@ -77,7 +77,12 @@ const bazarr = config.bazarrUrl && config.bazarrApiKey
   : null;
 /** Lê o histórico do Bazarr (em segundo plano) para rotular as legendas que ele baixou. */
 function sincronizarBazarr(): void {
-  bazarr?.sincronizar().catch((erro) => console.error("Falha ao ler o histórico do Bazarr:", erro instanceof Error ? erro.message : erro));
+  bazarr?.sincronizar().then(() => {
+    // Legenda nova do Bazarr que o catálogo ainda não conhece: varre já, sem esperar a varredura agendada.
+    const conhecidas = new Set(catalog.list().flatMap((item) => item.subtitles.map((legenda) => path.resolve(legenda.path))));
+    const faltando = bazarr.novas.filter((caminho) => !conhecidas.has(caminho));
+    if (faltando.length) { console.log(`Bazarr: ${faltando.length} legenda(s) nova(s); atualizando o catálogo.`); scan(); }
+  }).catch((erro) => console.error("Falha ao ler o histórico do Bazarr:", erro instanceof Error ? erro.message : erro));
 }
 
 /** Busca no TMDB o que ainda não está no cache (em segundo plano). */
