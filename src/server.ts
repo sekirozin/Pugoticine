@@ -18,7 +18,8 @@ import { RotasPainel } from "./painel/rotas.js";
 import { Transcoder } from "./transcoder.js";
 import { GerenciadorHls } from "./reproducao/hls.js";
 import { CacheKeyframes } from "./reproducao/keyframes.js";
-import { detectarVaapi } from "./reproducao/aceleracao.js";
+import { detectarVaapi, type Aceleracao } from "./reproducao/aceleracao.js";
+import type { OpcoesConversao } from "./reproducao/hls.js";
 import { GerenciadorSalas } from "./salas/salas.js";
 import { RotasSalas } from "./salas/rotas.js";
 import type { PlaybackPlan, PlaybackRequest, PugotiProfile } from "./types.js";
@@ -33,12 +34,39 @@ const metadata = new MetadataCatalog();
 const probe = new ProbeService(path.join(config.dataDir, "probe-cache.json"));
 const transcoder = new Transcoder(path.join(config.dataDir, "transcodes"));
 fs.mkdirSync(config.dataDir, { recursive: true });
-// Aceleração por GPU (VAAPI), como a do Jellyfin: testada uma vez ao iniciar; sem GPU ou se o teste falhar, software.
-const aceleracao = config.aceleracao === "vaapi" ? detectarVaapi(config.ffmpegPath, config.dispositivoVaapi) : null;
-console.log(config.aceleracao === "vaapi"
-  ? aceleracao ? `Aceleração de vídeo: VAAPI em ${aceleracao.dispositivo} (codifica H.264; decodifica ${aceleracao.decodifica.join(", ") || "nada"}).` : `Aceleração de vídeo: VAAPI pedida, mas ${config.dispositivoVaapi} não codificou H.264; usando software.`
-  : "Aceleração de vídeo: desligada (software).");
-const hls = new GerenciadorHls(path.join(config.dataDir, "hls"), new CacheKeyframes(path.join(config.dataDir, "keyframes.json")), config.ffmpegPath, aceleracao);
+// Aceleração por GPU (VAAPI), como a do Jellyfin: cada dispositivo é testado uma vez; sem GPU ou se o teste falhar,
+// software. O dispositivo das variáveis do container é testado já na inicialização (e aparece no registro).
+const deteccoesVaapi = new Map<string, Aceleracao | null>();
+function aceleracaoPara(dispositivo: string): Aceleracao | null {
+  if (!deteccoesVaapi.has(dispositivo)) {
+    const detectada = detectarVaapi(config.ffmpegPath, dispositivo);
+    deteccoesVaapi.set(dispositivo, detectada);
+    console.log(detectada ? `Aceleração de vídeo: VAAPI em ${detectada.dispositivo} (codifica H.264; decodifica ${detectada.decodifica.join(", ") || "nada"}).` : `Aceleração de vídeo: VAAPI pedida, mas ${dispositivo} não codificou H.264; usando software.`);
+  }
+  return deteccoesVaapi.get(dispositivo) ?? null;
+}
+if (config.aceleracao === "vaapi") aceleracaoPara(config.dispositivoVaapi);
+else console.log("Aceleração de vídeo: desligada (software).");
+/** Painel › Reprodução › Transcodificação aplicado a cada FFmpeg iniciado. Antes de a tela ser salva, valem as
+ *  variáveis do container (PUGOTICINE_ACELERACAO/PUGOTICINE_VAAPI_DISPOSITIVO) e os padrões do Jellyfin. */
+function opcoesConversao(): Partial<OpcoesConversao> {
+  const salva = bancoPainel.foiSalva("reproducao-transcodificacao");
+  const t = painel.configuracaoReproducao().transcodificacao as Record<string, unknown>;
+  const tipo = salva ? t.HardwareAccelerationType : config.aceleracao === "vaapi" ? "vaapi" : "none";
+  const dispositivo = salva && t.VaapiDevice ? String(t.VaapiDevice) : config.dispositivoVaapi;
+  let aceleracao = tipo === "vaapi" && t.EnableHardwareEncoding !== false ? aceleracaoPara(dispositivo) : null;
+  if (aceleracao && salva) {
+    const permitidos = Array.isArray(t.HardwareDecodingCodecs) ? t.HardwareDecodingCodecs.map(String) : [];
+    aceleracao = { ...aceleracao, decodifica: aceleracao.decodifica.filter(codec => permitidos.includes(codec)) };
+  }
+  return {
+    aceleracao, threads: Number(t.EncodingThreadCount ?? -1), preset: String(t.EncoderPreset ?? "auto"), crf: Number(t.H264Crf ?? 23),
+    filaMux: Number(t.MaxMuxingQueueSize ?? 2048), reforcoDownmix: Number(t.DownMixAudioBoost ?? 2),
+    limitar: t.EnableThrottling === true, limitarApos: Number(t.ThrottleDelaySeconds ?? 180),
+    removerSegmentos: t.EnableSegmentDeletion === true, manterSegundos: Number(t.SegmentKeepSeconds ?? 720)
+  };
+}
+const hls = new GerenciadorHls(path.join(config.dataDir, "hls"), new CacheKeyframes(path.join(config.dataDir, "keyframes.json")), config.ffmpegPath, opcoesConversao);
 const salas = new RotasSalas(new GerenciadorSalas(path.join(config.dataDir, "salas.db")), (id) => Boolean(catalog.get(id)), json, body);
 let lastScanAt = "";
 const versaoApp = JSON.parse(fs.readFileSync(path.join(config.publicDir, "..", "package.json"), "utf8")).version as string;

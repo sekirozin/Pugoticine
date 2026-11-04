@@ -91,7 +91,7 @@ export const PAGINAS: Pagina[] = [
   },
   {
     id: "reproducao-transcodificacao", titulo: "Transcodificação", grupo: "Servidor", pai: "Reprodução",
-    efeito: { tipo: "salvo", texto: "Salvo e disponível em /api/configuracao/reproducao para o player; o player ainda não lê estas opções (ligação pendente no braço do player)." },
+    efeito: { tipo: "parcial", texto: "O player aplica: aceleração de hardware (Nenhum ou VAAPI, dispositivo VA-API, codecs de decodificação, codificação por hardware), contagem de threads, preset, CRF H.264, fila de muxing, aumento do downmix, limites de transcodificação e remoção de segmentos — a cada vídeo aberto. As demais opções: " + NAO_IMPLEMENTADO },
     secoes: [
       { titulo: "Aceleração de Hardware", campos: [
         { chave: "HardwareAccelerationType", tipo: "selecao", rotulo: "Aceleração de hardware", ajuda: "Ativar a aceleração de hardware pode causar instabilidade em alguns sistemas.", padrao: "none", opcoes: [sn("none", "Nenhum"), sn("amf", "AMD AMF"), sn("qsv", "Intel QuickSync (QSV)"), sn("nvenc", "NVIDIA NVENC"), sn("v4l2m2m", "Video4Linux2 (V4L2)"), sn("vaapi", "Video Acceleration API (VAAPI)"), sn("videotoolbox", "Apple VideoToolBox"), sn("rkmpp", "Rockchip MPP (RKMPP)")] },

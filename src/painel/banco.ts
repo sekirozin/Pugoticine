@@ -48,6 +48,10 @@ export class BancoPainel {
     const linha = this.db.prepare("SELECT valores FROM configuracao WHERE pagina = ?").get(id) as { valores: string } | undefined;
     return { ...padroes(p), ...(linha ? JSON.parse(linha.valores) : {}) };
   }
+  /** A página já foi salva alguma vez (senão valem os padrões, e o player usa as variáveis do container). */
+  foiSalva(id: string): boolean {
+    return Boolean(this.db.prepare("SELECT 1 FROM configuracao WHERE pagina = ?").get(id));
+  }
   salvar(id: string, entrada: Record<string, unknown>): Record<string, unknown> {
     const p = pagina(id);
     if (!p) throw new Error("Página inexistente.");

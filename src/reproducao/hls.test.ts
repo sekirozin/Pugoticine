@@ -144,3 +144,61 @@ test("PQA-222: se a GPU falha, a sessão passa para software sozinha e o segment
     assert.ok(Math.abs(inicioDoSegmento(init, s4).pts - 24) < 0.05, "segmento 4 começa em 24 s");
   } finally { quebrada.parar(); }
 });
+
+const estadoDoProcesso = (pid: number) => fs.readFileSync(`/proc/${pid}/stat`, "utf8").split(") ")[1][0];
+
+test("PQA-223: limites de transcodificação — FFmpeg pausado à frente do que se assiste e retomado quando o player pede", async () => {
+  const limitado = new GerenciadorHls(path.join(pasta, "hls-limite"), new CacheKeyframes(path.join(pasta, "keyframes3.json")), "ffmpeg", () => ({ limitar: true, limitarApos: 12 }));
+  try {
+    const plano: PlaybackPlan = { mode: "transcode", reason: "teste", targetHeight: null, toneMap: false, audioStreamIndex: info.audioTracks[0].streamIndex, subtitleStreamIndex: null, audioCopy: false };
+    const id = limitado.criar("kenzo", media, info, plano);
+    const sessao = limitado.sessao(id, "kenzo", media.id)!;
+    await limitado.segmento(sessao, 0);
+    const pid = sessao.trabalho!.processo.pid!;
+    await new Promise(r => setTimeout(r, 4500));
+    assert.equal(sessao.trabalho!.pausado, true, "pausou");
+    assert.equal(estadoDoProcesso(pid), "T", "processo parado (SIGSTOP)");
+    const parado = sessao.trabalho!.proximo;
+    assert.ok(parado * SEGUNDOS_POR_SEGMENTO <= 12 + 3 * SEGUNDOS_POR_SEGMENTO && parado < 30, `parou perto do limite (próximo ${parado})`);
+    await new Promise(r => setTimeout(r, 2500));
+    for (let n = sessao.trabalho!.proximo; fs.existsSync(path.join(sessao.pasta, `${n}.mp4`)); n++) assert.fail("continuou convertendo pausado");
+    // A pessoa avança: o pedido retoma o FFmpeg e ele volta a produzir.
+    await limitado.segmento(sessao, parado - 1);
+    assert.equal(sessao.trabalho!.pausado, false);
+    const depois = await limitado.segmento(sessao, parado + 1);
+    assert.ok(fs.existsSync(depois), "voltou a converter: o segmento depois da pausa foi gerado");
+    assert.notEqual(estadoDoProcesso(pid), "T", "processo não está mais parado");
+  } finally { limitado.parar(); }
+});
+
+test("PQA-223: remover segmentos — os que ficaram para trás são apagados e voltam se a pessoa voltar", async () => {
+  const removendo = new GerenciadorHls(path.join(pasta, "hls-remove"), new CacheKeyframes(path.join(pasta, "keyframes4.json")), "ffmpeg", () => ({ removerSegmentos: true, manterSegundos: 12 }));
+  try {
+    const plano: PlaybackPlan = { mode: "remux", reason: "teste", targetHeight: null, toneMap: false, audioStreamIndex: info.audioTracks[0].streamIndex, subtitleStreamIndex: null, audioCopy: false };
+    const id = removendo.criar("lee", media, info, plano);
+    const sessao = removendo.sessao(id, "lee", media.id)!;
+    // Pedidos em ordem, como quem assiste (pular mais de 24 s reiniciaria o FFmpeg e o meio nem existiria).
+    let s10 = "";
+    for (let n = 0; n <= 11; n++) { const arquivo = await removendo.segmento(sessao, n); if (n === 10) s10 = arquivo; }
+    removendo.manter(sessao);
+    const existe = (n: number) => fs.existsSync(path.join(sessao.pasta, `${n}.mp4`));
+    const limite = sessao.inicios[11] - 12;
+    for (let n = 0; n < 11; n++) assert.equal(existe(n), sessao.inicios[n] + sessao.duracoes[n] >= limite, `segmento ${n}`);
+    assert.ok(!existe(0) && existe(10) && existe(11), "apaga só os antigos");
+    const init = await removendo.segmento(sessao, -1);
+    assert.ok(Math.abs(inicioDoSegmento(init, await removendo.segmento(sessao, 0)).pts) < 0.05, "voltar ao início gera de novo");
+    assert.ok(fs.existsSync(s10));
+  } finally { removendo.parar(); }
+});
+
+test("PQA-223: opções do Painel na linha de comando (preset, CRF, threads, fila, reforço do downmix)", async () => {
+  const { argumentosFfmpeg } = await import("./hls.js");
+  const plano: PlaybackPlan = { mode: "transcode", reason: "teste", targetHeight: null, toneMap: false, audioStreamIndex: info.audioTracks[0].streamIndex, subtitleStreamIndex: null, audioCopy: false };
+  const infoSeis = { ...info, audioTracks: info.audioTracks.map(a => ({ ...a, channels: 6 })) };
+  const linha = argumentosFfmpeg({ entrada: video, info: infoSeis, plano, copiaVideo: false, segmento: 0, inicioSegundos: 0, pasta, ffmpegThreads: 3, preset: "faster", crf: 20, filaMux: 4096, reforcoDownmix: 1.5 }).join(" ");
+  assert.match(linha, /-threads 3 /);
+  assert.match(linha, /-preset faster -crf 20 /);
+  assert.match(linha, /-max_muxing_queue_size 4096 /);
+  assert.match(linha, /-ac 2 -b:a 192k -af volume=1\.5/);
+  assert.match(argumentosFfmpeg({ entrada: video, info, plano, copiaVideo: false, segmento: 0, inicioSegundos: 0, pasta, preset: "auto", ffmpegThreads: -1 }).join(" "), /-threads 0 .*-preset veryfast -crf 23/);
+});
