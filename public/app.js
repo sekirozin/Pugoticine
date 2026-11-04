@@ -400,10 +400,6 @@ async function bootstrap() {
     state.bibliotecas = data.bibliotecas ?? [];
     renderNavBibliotecas();
     state.progress = new Map(data.progress.map((item) => [item.mediaId, item]));
-    $("#profile-name").textContent = data.profile.nickname || data.profile.displayName;
-    $("#profile-username").textContent = `@${data.profile.username}`;
-    $("#avatar-fallback").textContent = (data.profile.nickname || data.profile.username).charAt(0).toUpperCase();
-    if (data.profile.avatarUrl) $("#avatar").src = data.profile.avatarUrl;
     $("#scan-button").hidden = data.profile.role !== "admin";
     $("#painel-button").hidden = data.profile.role !== "admin";
     aplicarNomeServidor();
@@ -430,10 +426,7 @@ $("#sidebar").addEventListener("click", (event) => {
   if (innerWidth <= 700) toggleMenu(false); render();
 });
 $("#search").addEventListener("input", (event) => { state.query = event.target.value; render(); });
-$("#profile-button").addEventListener("click", () => { $("#profile-menu").hidden = !$("#profile-menu").hidden; });
-$("#profile-open")?.addEventListener("click", (event) => { event.preventDefault(); location.assign(`https://pugotilab.com/auth/profile?return=${encodeURIComponent(window.location.href)}`); });
 $("#logout").addEventListener("click", logout);
-$("#profile-logout").addEventListener("click", logout);
 $("#player-close").addEventListener("click", closePlayer);
 $("#player-quality").addEventListener("change", reloadPlayback);
 $("#player-audio").addEventListener("change", reloadPlayback);

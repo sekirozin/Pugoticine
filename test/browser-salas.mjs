@@ -55,7 +55,7 @@ async function pessoa(quem) {
     const caixa = (s) => document.querySelector(s)?.getBoundingClientRect();
     const botao = document.getElementById("salas-abrir");
     return { naBarra: Boolean(botao.closest(".topbar")), noMenu: Boolean(document.querySelector(".sidebar #salas-abrir")), titulo: botao.title,
-      botao: caixa("#salas-abrir"), marca: caixa("#brand"), busca: caixa(".topbar .search"), perfil: caixa("#profile-button") };
+      botao: caixa("#salas-abrir"), marca: caixa("#brand"), busca: caixa(".topbar .search"), perfil: caixa("pugoti-conta .pc-gatilho") };
   });
   assert.ok(posicao.naBarra && !posicao.noMenu, "botão na barra superior, não no menu lateral");
   assert.equal(posicao.titulo, "Salas de Filmes");

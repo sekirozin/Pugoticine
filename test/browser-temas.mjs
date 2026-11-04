@@ -8,12 +8,13 @@ const dir=process.env.PUGOTICINE_FRONTEND;
 const browser=await pw.chromium.launch({executablePath:'/usr/bin/chromium'});
 try{
  for(const size of [{width:1440,height:900},{width:390,height:844}]){
-  const context=await browser.newContext({viewport:size});
+  // Sistema escuro: com a preferência "Seguir o aparelho" (PQA-280) o Pugoticine segue o tema do sistema.
+  const context=await browser.newContext({viewport:size,colorScheme:'dark'});
   await context.addCookies([{name:'pugotilab_session',value:'dev-sekiro',url:base}]);
   if(dir)await context.route(`${base}/**`,async route=>{const name=new URL(route.request().url()).pathname.slice(1)||'index.html';if(name.includes('/')||!/\.(html|css|js|svg)$/.test(name))return route.continue();try{await route.fulfill({body:await fs.readFile(path.join(dir,name)),contentType:name.endsWith('.css')?'text/css':name.endsWith('.js')?'text/javascript':name.endsWith('.svg')?'image/svg+xml':'text/html'});}catch{return route.continue();}});
   await context.addInitScript(()=>{localStorage.setItem('pugoticine:tema','4');localStorage.setItem('pugoticine:modo','claro');});
   const p=await context.newPage();const errors=[];p.on('pageerror',e=>errors.push(String(e)));await p.goto(base);await p.waitForSelector('.titulo');
-  await p.locator('#profile-button').click();
+  await p.locator('pugoti-conta .pc-gatilho').click();
   assert.equal(await p.locator('#tema-seletor,#modo-seletor').count(),0);
   const state=await p.evaluate(()=>({bg:getComputedStyle(document.body).backgroundColor,text:getComputedStyle(document.body).color,primary:getComputedStyle(document.documentElement).getPropertyValue('--primary').trim(),tema:document.documentElement.dataset.tema,modo:document.documentElement.dataset.modo,storage:[localStorage.getItem('pugoticine:tema'),localStorage.getItem('pugoticine:modo')],width:document.documentElement.scrollWidth}));
   assert.deepEqual([state.bg,state.text,state.primary,state.tema,state.modo,state.storage],['rgb(16, 16, 16)','rgb(255, 255, 255)','#c8ff00','2','escuro',[null,null]]);

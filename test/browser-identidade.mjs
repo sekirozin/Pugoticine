@@ -12,7 +12,8 @@ const fotos = process.argv[2];
 const navegador = await pw.chromium.launch({ executablePath: "/usr/bin/chromium" });
 const erros = [];
 const iconesForaDoTabler = (page) => page.evaluate(() => [...document.querySelectorAll("svg")]
-  .filter((s) => !s.closest("#player video") && !s.classList.contains("icone-tabler") && !s.classList.contains("icone-tabler-cheio"))
+  // <pugoti-conta> (menu da conta compartilhado, PQA-280) traz os próprios ícones Tabler embutidos.
+  .filter((s) => !s.closest("#player video") && !s.closest("pugoti-conta") && !s.classList.contains("icone-tabler") && !s.classList.contains("icone-tabler-cheio"))
   .map((s) => s.outerHTML.slice(0, 120)));
 try {
   // ---------- usuário comum ----------

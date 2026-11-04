@@ -50,16 +50,17 @@ try {
   if (fotos) await page.screenshot({ path: path.join(fotos, "metadados-serie.png") });
   await page.keyboard.press("Escape");
 
-  // PQA-228: avatar inteiro no círculo (foto retrato, mais alta que larga).
+  // PQA-228: avatar inteiro no círculo (foto retrato, mais alta que larga) — agora no menu da conta (<pugoti-conta>).
   await page.evaluate(() => {
     const c = Object.assign(document.createElement("canvas"), { width: 60, height: 120 });
     const g = c.getContext("2d"); g.fillStyle = "#c00"; g.fillRect(0, 0, 60, 120);
-    document.querySelector("#avatar").src = c.toDataURL();
+    const conta = document.querySelector("pugoti-conta");
+    conta.perfil = { username: "marcos", displayName: "marcos", avatarUrl: c.toDataURL(), preferences: { theme: "escuro" } };
+    conta.render();
   });
-  await page.waitForFunction(() => document.querySelector("#avatar").complete);
-  const [botao, foto] = await Promise.all([page.locator("#profile-button").boundingBox(), page.locator("#avatar").boundingBox()]);
-  for (const k of ["x", "y", "width", "height"]) assert.ok(Math.abs(botao[k] - foto[k]) < 1, `avatar ${k}: ${foto[k]} ≠ ${botao[k]}`);
-  assert.equal(await page.locator("#avatar-fallback").evaluate((e) => getComputedStyle(e).visibility), "hidden");
+  await page.waitForFunction(() => document.querySelector("pugoti-conta .pc-gatilho .pc-avatar img")?.complete);
+  const [circulo, foto] = await Promise.all([page.locator("pugoti-conta .pc-gatilho .pc-avatar").boundingBox(), page.locator("pugoti-conta .pc-gatilho .pc-avatar img").boundingBox()]);
+  for (const k of ["width", "height"]) assert.ok(Math.abs(circulo[k] - 2 - foto[k]) < 1.5, `avatar ${k}: ${foto[k]} ≠ ${circulo[k]}`); // 2 = borda de 1 px
   assert.deepEqual(erros, []);
   console.log("PQA-227/228 ok");
 } finally {

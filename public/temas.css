@@ -30,4 +30,18 @@ html:where([data-tema]) :is(.osd-menu,.osd-info){background:var(--surface);borde
 
 html:where([data-tema]) .player-modal{--osd-destaque:var(--primary)}
 .profile-menu{max-height:calc(100dvh - 70px);overflow-y:auto}
+/* Versão clara da paleta Lima (preferência de tema do Pugoti Profile, 04/11/2026). O Lima continua no preenchimento
+   dos botões; textos de destaque usam um verde-oliva escuro para ter contraste no branco. O player continua escuro. */
+:root[data-tema="2"][data-pugoti-tema="claro"]{--bg:#f4f5ef;--surface:#ffffff;--surface-2:#eceee6;--border:#d4d8c9;--text:#141414;--muted:#575c4e;--primary:#c8ff00;--primary-hover:#b6eb00;--tema-campo:#ffffff;--tema-particula:110,140,0;--tema-brilho:20,20,20;--tema-sobre-destaque:#101010;--tema-selecao:#eef8cf;--tema-borda-destaque:#9fc400;--tema-texto-destaque:#3d5200;color-scheme:light}
+html[data-pugoti-tema="claro"]:where([data-tema]) :is(.nav-item.active,.painel-menu-item.ativo,.painel-filtro.ativo,.salas-topo.ativo,.sala-tipo,.eyebrow,.painel-cartao code,.painel-biblioteca-icone svg){color:var(--tema-texto-destaque)}
+html[data-pugoti-tema="claro"] body{background:var(--bg);color:var(--text)}
+html[data-pugoti-tema="claro"] :is(.titulo-legenda-nome,.fileira h2,.brand strong,.nav-item,.search input,.loading,.content h1,.content h2,.content h3){color:var(--text)}
+html[data-pugoti-tema="claro"] :is(.titulo-legenda-ano,.search svg){color:var(--muted)}
+html[data-pugoti-tema="claro"] .search{background:var(--surface-2);border-color:var(--border)}
+/* Destaque e topo dos detalhes ficam escuros (texto sobre a imagem), como uma tela de cinema. */
+html[data-pugoti-tema="claro"] :is(.destaque,.detalhes-topo){--text:#fff;--muted:#d4d4d4;--surface:#101010;--surface-2:#242424;--border:#393939;--tema-selecao:#303b15;--tema-texto-destaque:#c8ff00;color:#fff}
+html[data-pugoti-tema="claro"] .player-modal{color-scheme:dark}
+/* Sem sobreposição das fileiras no destaque (o título da fileira ficaria escuro sobre a imagem). */
+html[data-pugoti-tema="claro"] .fileiras{margin-top:18px}
+html[data-pugoti-tema="claro"] .destaque-sombra{background:linear-gradient(to bottom,rgba(0,0,0,.7) 0,rgba(0,0,0,.25) 110px,transparent 220px),linear-gradient(77deg,rgba(0,0,0,.82) 0%,rgba(0,0,0,.45) 38%,transparent 70%),linear-gradient(to top,rgba(0,0,0,.55) 0%,transparent 35%)}
 }

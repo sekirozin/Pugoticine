@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/salas.css">
   <link rel="stylesheet" href="/temas.css">
+  <script src="/pugoti-conta.js?v=conta-20261104"></script>
 </head>
 <body>
   <header class="topbar">
@@ -29,7 +30,8 @@
       <svg data-icone="search" class="icone-tabler" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 10m-7 0a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" /><path d="M21 21l-6 -6" /></svg>
       <input id="search" type="search" placeholder="Pesquisar filmes" autocomplete="off">
     </label>
-    <button class="profile-button" id="profile-button" aria-label="Perfil"><span id="avatar-fallback">P</span><img id="avatar" alt=""></button>
+    <!-- Menu da conta igual em todos os serviços Pugotilab (Perfil, atalhos, tema, Sair). -->
+    <pugoti-conta servico="Pugoticine"></pugoti-conta>
   </header>
 
   <aside class="sidebar" id="sidebar" aria-label="Navegação">
@@ -49,12 +51,6 @@
 
   <main id="content" class="content"><div class="loading">Carregando sua biblioteca...</div></main>
 
-  <div class="profile-menu" id="profile-menu" hidden>
-    <strong id="profile-name">Pugotilab</strong>
-    <small id="profile-username"></small>
-    <a id="profile-open" href="https://pugotilab.com/auth/profile">Perfil</a>
-    <button id="profile-logout">Sair</button>
-  </div>
 
   <!-- Player em tela cheia no estilo do Jellyfin (controllers/playback/video): barra superior, progresso e controles
        que somem depois de 3 s parado. A interface fica em player-osd.js; os seletores escondidos guardam as escolhas
