@@ -30,7 +30,7 @@ export const config = {
   organizadorToken: process.env.PUGOTICINE_ORGANIZADOR_TOKEN ?? "",
   // Resumo do Pugoti Profile ("Assistindo no Pugoticine"): o auth consulta com este token, pela rede interna.
   resumoToken: process.env.PUGOTILAB_RESUMO_TOKEN ?? "",
-  enderecoPublico: (process.env.PUGOTICINE_ENDERECO_PUBLICO ?? "https://room.pugotilab.com").replace(/\/$/, ""),
+  enderecoPublico: (process.env.PUGOTICINE_ENDERECO_PUBLICO ?? "https://cine.pugotilab.com").replace(/\/$/, ""),
   /** Só pastas aqui dentro podem ser organizadas (caminhos como o Transmission/Radarr/Sonarr veem). */
   organizadorPasta: process.env.ORGANIZADOR_PASTA ?? "/data/Downloads/complete",
   organizadorRaizes: {

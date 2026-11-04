@@ -12,14 +12,15 @@
  */
 (() => {
   if (customElements.get("pugoti-conta")) return;
+  // Ícones oficiais (PU + sigla), servidos pelo auth em /auth/assets/servicos/<chave>.png.
   const SERVICOS = [
-    { nome: "Pugoticine", sigla: "CI", cor: "#C8FF00", url: "https://room.pugotilab.com/" },
-    { nome: "Pugotiread", sigla: "RE", cor: "#4F8CFF", url: "https://read.pugotilab.com/" },
-    { nome: "Pugotitasks", sigla: "TA", cor: "#2997EB", url: "https://task.pugotilab.com/" },
-    { nome: "Pugotimoney", sigla: "MO", cor: "#22C55E", url: "https://finance.pugotilab.com/" },
-    { nome: "Pugotilist", sigla: "LI", cor: "#F59E0B", url: "https://list.pugotilab.com/" },
-    { nome: "Pugotidice", sigla: "DI", cor: "#EF4444", url: "https://dice.pugotilab.com/" },
-    { nome: "Portal", sigla: "LA", cor: "#4FB3FF", url: "https://pugotilab.com/" }
+    { nome: "Pugoticine", chave: "cine", url: "https://cine.pugotilab.com/" },
+    { nome: "Pugotiread", chave: "read", url: "https://read.pugotilab.com/" },
+    { nome: "Pugotitasks", chave: "tasks", url: "https://task.pugotilab.com/" },
+    { nome: "Pugotimoney", chave: "money", url: "https://finance.pugotilab.com/" },
+    { nome: "Pugotilist", chave: "list", url: "https://list.pugotilab.com/" },
+    { nome: "Pugotidice", chave: "dice", url: "https://dice.pugotilab.com/" },
+    { nome: "Portal", chave: "portal", url: "https://pugotilab.com/" }
   ];
   const ICONES = {
     caret: '<path d="M6 9l6 6l6 -6"/>',
@@ -33,13 +34,14 @@
   const icone = (nome) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONES[nome]}</svg>`;
   const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const CHAVE = "pugoti-tema";
+  let sessaoCompartilhada = null;
   const curto = (nome) => { const t = nome.replace(/^Pugoti/, ""); return t ? t.charAt(0).toUpperCase() + t.slice(1) : nome; };
 
   const CSS = `
 pugoti-conta{display:inline-block;position:relative;flex:none;font-family:inherit;line-height:normal;
   --pc-accent:var(--pa-accent,var(--primary,var(--accent,#4fb3ff)));--pc-border:var(--pa-border,rgba(127,127,127,.32));
   --pc-bg:var(--pa-bg,#11161d);--pc-hover:var(--pa-hover,rgba(127,127,127,.16));--pc-text:var(--pa-text,#eef2f6);--pc-muted:var(--pa-muted,#9aa6b2);--pc-danger:#ff8a80}
-html[data-pugoti-tema="claro"] pugoti-conta{--pc-bg:var(--pa-bg-claro,#ffffff);--pc-text:var(--pa-text-claro,#15191e);--pc-muted:var(--pa-muted-claro,#5b6672);--pc-hover:rgba(0,0,0,.06);--pc-border:rgba(0,0,0,.14);--pc-danger:#c62828}
+html[data-pugoti-tema="claro"] pugoti-conta:not([so-escuro]){--pc-bg:var(--pa-bg-claro,#ffffff);--pc-text:var(--pa-text-claro,#15191e);--pc-muted:var(--pa-muted-claro,#5b6672);--pc-hover:rgba(0,0,0,.06);--pc-border:rgba(0,0,0,.14);--pc-danger:#c62828}
 pugoti-conta *{box-sizing:border-box}
 pugoti-conta svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
 pugoti-conta .pc-gatilho{display:flex;align-items:center;gap:6px;height:42px;padding:4px 8px 4px 4px;border:1px solid transparent;border-radius:12px;background:transparent;color:inherit;cursor:pointer;font:inherit}
@@ -60,11 +62,11 @@ pugoti-conta .pc-secao{padding:10px 14px 4px;font-size:11px;font-weight:800;lett
 pugoti-conta .pc-apps{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:4px 10px 10px}
 pugoti-conta .pc-app{display:grid;justify-items:center;gap:4px;padding:8px 2px;border-radius:10px;color:var(--pc-text);text-decoration:none;font-size:11px}
 pugoti-conta .pc-app[aria-current="true"]{background:var(--pc-hover)}
-pugoti-conta .pc-sigla{position:relative;display:grid;grid-template-columns:1fr 1fr;width:30px;height:30px;padding:4px;border-radius:8px;background:#fff;border:1px solid var(--pc-border);font:900 10px/1 system-ui,sans-serif;text-align:center;align-content:center;gap:1px}
-pugoti-conta .pc-sigla b:nth-child(1){color:#141414}pugoti-conta .pc-sigla b:nth-child(2){color:#b4b4b4}pugoti-conta .pc-sigla b:nth-child(4){color:#b4b4b4}
+pugoti-conta .pc-icone{display:block;width:30px;height:30px;border-radius:8px;border:1px solid var(--pc-border);background:#fff;object-fit:cover}
 pugoti-conta .pc-tema{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:0 14px 10px;padding:3px;border:1px solid var(--pc-border);border-radius:10px}
 pugoti-conta .pc-tema button{display:flex;align-items:center;justify-content:center;gap:5px;min-height:32px;border:0;border-radius:7px;background:transparent;color:var(--pc-text);font:inherit;font-size:12px;cursor:pointer}
 pugoti-conta .pc-tema button svg{width:15px;height:15px}
+pugoti-conta .pc-nota{margin:-4px 14px 10px;font-size:11px;color:var(--pc-muted)}
 pugoti-conta .pc-tema button[aria-pressed="true"]{background:var(--pc-accent);color:#0b0f14;font-weight:700}
 `;
 
@@ -88,7 +90,8 @@ pugoti-conta .pc-tema button[aria-pressed="true"]{background:var(--pc-accent);co
     if ((window.pugotiConta?.preferencia ?? preferenciaInicial) === "sistema") aplicarTema("sistema");
   });
 
-  if (!document.getElementById("pugoti-conta-css")) {
+  // Serviços com CSP sem 'unsafe-inline' em style-src carregam pugoti-conta.css (link com data-pugoti-conta-css).
+  if (!document.getElementById("pugoti-conta-css") && !document.querySelector("link[data-pugoti-conta-css]")) {
     const estilo = document.createElement("style");
     estilo.id = "pugoti-conta-css";
     estilo.textContent = CSS;
@@ -97,6 +100,9 @@ pugoti-conta .pc-tema button[aria-pressed="true"]{background:var(--pc-accent);co
 
   class PugotiConta extends HTMLElement {
     connectedCallback() {
+      // Serviços que redesenham a tela movem o MESMO elemento para o lugar novo: não refaz nada, só religa os eventos.
+      if (this._iniciado) { this.ligarDocumento(); return; }
+      this._iniciado = true;
       this.auth = (this.getAttribute("auth") || "https://pugotilab.com").replace(/\/$/, "");
       this.servico = this.getAttribute("servico") || "";
       this.perfil = null;
@@ -106,6 +112,9 @@ pugoti-conta .pc-tema button[aria-pressed="true"]{background:var(--pc-accent);co
       this.carregar();
       this._fora = (e) => { if (this.aberto && !this.contains(e.target)) this.alternar(false); };
       this._esc = (e) => { if (e.key === "Escape" && this.aberto) { this.alternar(false); this.querySelector(".pc-gatilho")?.focus(); } };
+      this.ligarDocumento();
+    }
+    ligarDocumento() {
       document.addEventListener("click", this._fora);
       document.addEventListener("keydown", this._esc);
     }
@@ -115,13 +124,19 @@ pugoti-conta .pc-tema button[aria-pressed="true"]{background:var(--pc-accent);co
     }
     async carregar() {
       try {
-        const resposta = await fetch(`${this.auth}/auth/api/session`, { credentials: "include", cache: "no-store" });
-        if (!resposta.ok) return;
-        this.perfil = (await resposta.json()).profile;
-        this.preferencia = this.perfil?.preferences?.theme || "sistema";
-        window.pugotiConta = { perfil: this.perfil, preferencia: this.preferencia };
-        aplicarTema(this.preferencia);
-        document.dispatchEvent(new CustomEvent("pugoti:conta", { detail: this.perfil }));
+        // Uma consulta por página: serviços que redesenham o cabeçalho recriam o menu várias vezes.
+        const primeira = !sessaoCompartilhada;
+        sessaoCompartilhada ||= fetch(`${this.auth}/auth/api/session`, { credentials: "include", cache: "no-store" })
+          .then((resposta) => resposta.ok ? resposta.json() : null).then((corpo) => corpo?.profile ?? null).catch(() => null);
+        const perfil = await sessaoCompartilhada;
+        if (!perfil || !this.isConnected) return;
+        this.perfil = perfil;
+        this.preferencia = window.pugotiConta?.preferencia ?? perfil.preferences?.theme ?? "sistema";
+        window.pugotiConta = { perfil, preferencia: this.preferencia };
+        if (primeira) {
+          aplicarTema(this.preferencia);
+          document.dispatchEvent(new CustomEvent("pugoti:conta", { detail: perfil }));
+        }
         this.render();
       } catch { /* sem conta: o menu mostra só o botão */ }
     }
@@ -155,9 +170,10 @@ pugoti-conta .pc-tema button[aria-pressed="true"]{background:var(--pc-accent);co
           <div class="pc-resumo">${this.avatar()}<div><strong>${esc(nome)}</strong><small>${p ? `@${esc(p.username)}${p.role === "admin" ? " · Administrador" : ""}` : "Entre para ver sua conta"}</small></div></div>
           <a class="pc-item" role="menuitem" href="${this.auth}/auth/profile?return=${volta}">${icone("user")}<span>Perfil</span></a>
           <div class="pc-secao">Serviços</div>
-          <nav class="pc-apps" aria-label="Serviços Pugotilab">${SERVICOS.map((s) => `<a class="pc-app" href="${s.url}" ${s.nome === this.servico ? 'aria-current="true"' : ""}><span class="pc-sigla" aria-hidden="true"><b>P</b><b>U</b><b style="color:${s.cor}">${s.sigla[0]}</b><b>${s.sigla[1]}</b></span><span>${esc(curto(s.nome))}</span></a>`).join("")}</nav>
+          <nav class="pc-apps" aria-label="Serviços Pugotilab">${SERVICOS.map((s) => `<a class="pc-app" href="${s.url}" ${s.nome === this.servico ? 'aria-current="true"' : ""}><img class="pc-icone" src="${this.auth}/auth/assets/servicos/${s.chave}.png" alt="" loading="lazy"><span>${esc(curto(s.nome))}</span></a>`).join("")}</nav>
           <div class="pc-secao">Tema</div>
           <div class="pc-tema" role="group" aria-label="Tema">${temas.map(([v, i, t]) => `<button type="button" data-tema="${v}" aria-pressed="${this.preferencia === v}">${icone(i)}<span>${t}</span></button>`).join("")}</div>
+          ${this.hasAttribute("so-escuro") ? `<p class="pc-nota">O ${esc(this.servico || "serviço")} usa só o tema escuro; a escolha vale para os outros serviços.</p>` : ""}
           <a class="pc-item pc-sair" role="menuitem" href="${this.auth}/auth/logout?return=${volta}">${icone("logout")}<span>Sair</span></a>
         </div>`;
       this.querySelector(".pc-gatilho").addEventListener("click", (e) => { e.stopPropagation(); this.alternar(); });
@@ -165,4 +181,27 @@ pugoti-conta .pc-tema button[aria-pressed="true"]{background:var(--pc-accent);co
     }
   }
   customElements.define("pugoti-conta", PugotiConta);
+
+  /**
+   * Para serviços que redesenham a tela com innerHTML: o HTML deixa <span data-pugoti-conta></span> e, depois de cada
+   * render, o serviço chama pugotiEncaixarConta("Nome do serviço"). O mesmo menu é movido para o lugar novo (não fecha
+   * nem consulta o auth de novo).
+   */
+  let contaPersistente = null;
+  window.pugotiEncaixarConta = (servico) => {
+    const lugar = document.querySelector("[data-pugoti-conta]");
+    if (!lugar) return;
+    if (!contaPersistente) {
+      contaPersistente = document.createElement("pugoti-conta");
+      if (servico) contaPersistente.setAttribute("servico", servico);
+      if (lugar.hasAttribute("data-so-escuro")) contaPersistente.setAttribute("so-escuro", "");
+    }
+    lugar.replaceWith(contaPersistente);
+  };
+  // Automático: quando o serviço redesenha e deixa o lugar marcado, o mesmo menu é encaixado logo em seguida.
+  const observar = () => new MutationObserver(() => {
+    const lugar = document.querySelector("[data-pugoti-conta]");
+    if (lugar) window.pugotiEncaixarConta(lugar.getAttribute("data-pugoti-conta") || undefined);
+  }).observe(document.documentElement, { childList: true, subtree: true });
+  if (document.documentElement) observar();
 })();

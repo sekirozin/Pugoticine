@@ -24,6 +24,6 @@ const item = watching.find((w) => w.title === meio.title);
 assert.ok(item, JSON.stringify(watching));
 assert.equal(item.detail, "faltam 80 min");
 assert.equal(item.percent, 20);
-assert.match(item.imageUrl, /^https:\/\/room\.pugotilab\.com\/api\/media\/[a-f0-9]{24}\/imagem\/poster\?v=.+&l=342$/);
+assert.match(item.imageUrl, /^https:\/\/cine\.pugotilab\.com\/api\/media\/[a-f0-9]{24}\/imagem\/poster\?v=.+&l=342$/);
 assert.ok(!watching.some((w) => w.title === fim.title), "terminado não aparece");
 console.log("PQA-279 (Pugoticine) ok");
