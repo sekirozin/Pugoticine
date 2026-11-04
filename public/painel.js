@@ -86,7 +86,27 @@ const AVISOS = { real: "painel-aviso-real", parcial: "painel-aviso-parcial", sal
 const estado = { paginas: [], atual: "painel", timer: null, container: null, f: null, abertos: new Set() };
 try { estado.atual = sessionStorage.getItem("painel:pagina") || "painel"; } catch { /* sem sessionStorage */ }
 
-export function fecharPainel() { clearTimeout(estado.timer); estado.timer = null; estado.container = null; }
+// Como no Jellyfin (apps/dashboard/AppLayout.tsx + components/drawer/AppDrawer.tsx): no Painel o menu lateral do app
+// dá lugar ao menu do Painel, com o cabeçalho (ícone, nome do servidor e versão) que volta para o início. Em tela
+// grande o menu fica fixo; no celular abre pelo botão de menu da barra superior, como o menu normal.
+export function fecharPainel() {
+  clearTimeout(estado.timer); estado.timer = null; estado.container = null;
+  document.querySelector("#painel-drawer")?.remove();
+  document.body.classList.remove("modo-painel");
+}
+
+function drawer() {
+  const sidebar = document.querySelector("#sidebar");
+  let gaveta = document.querySelector("#painel-drawer");
+  if (!gaveta) {
+    gaveta = document.createElement("div");
+    gaveta.id = "painel-drawer";
+    gaveta.className = "painel-drawer";
+    sidebar.append(gaveta);
+  }
+  document.body.classList.add("modo-painel");
+  return gaveta;
+}
 
 export async function abrirPainel(container, ferramentas) {
   estado.container = container; estado.f = ferramentas;
@@ -97,9 +117,13 @@ export async function abrirPainel(container, ferramentas) {
   if (!estado.paginas.some((p) => p.id === estado.atual)) estado.atual = "painel";
   const atual = estado.paginas.find((p) => p.id === estado.atual);
   if (atual?.pai) estado.abertos.add(atual.pai);
-  container.innerHTML = `<div class="painel-app"><nav class="painel-menu" aria-label="Painel">${menu()}</nav><div class="painel-conteudo" data-painel-conteudo></div></div>`;
-  container.querySelectorAll("[data-painel-ir]").forEach((b) => b.addEventListener("click", () => irPara(b.dataset.painelIr)));
-  container.querySelectorAll("[data-painel-expandir]").forEach((b) => b.addEventListener("click", () => {
+  const gaveta = drawer();
+  const servidor = estado.servidor ?? (estado.servidor = await ferramentas.api("/api/marca").catch(() => ({})));
+  gaveta.innerHTML = `<a class="painel-drawer-topo" href="/" data-painel-inicio title="Voltar para o início"><img src="/pugoticine-icon.svg" alt=""><span><strong>${ferramentas.escapeHtml(servidor.nomeServidor || "PugotiCine")}</strong><small>${ferramentas.escapeHtml(servidor.versao || "")}</small></span></a><nav class="painel-menu" aria-label="Painel">${menu()}</nav>`;
+  container.innerHTML = `<div class="painel-app"><div class="painel-conteudo" data-painel-conteudo></div></div>`;
+  gaveta.querySelector("[data-painel-inicio]").addEventListener("click", (ev) => { ev.preventDefault(); ferramentas.voltarAoInicio?.(); });
+  gaveta.querySelectorAll("[data-painel-ir]").forEach((b) => b.addEventListener("click", () => { ferramentas.fecharMenu?.(); irPara(b.dataset.painelIr); }));
+  gaveta.querySelectorAll("[data-painel-expandir]").forEach((b) => b.addEventListener("click", () => {
     const pai = b.dataset.painelExpandir;
     estado.abertos.has(pai) ? estado.abertos.delete(pai) : estado.abertos.add(pai);
     abrirPainel(container, ferramentas);
@@ -109,6 +133,7 @@ export async function abrirPainel(container, ferramentas) {
 
 function irPara(id) {
   estado.atual = id;
+  estado.tarefaAberta = null;
   try { sessionStorage.setItem("painel:pagina", id); } catch { /* ignora */ }
   abrirPainel(estado.container, estado.f);
 }
@@ -197,7 +222,7 @@ function ligarFormulario(alvo, pagina) {
       }
       status.textContent = "Configurações salvas.";
       estado.f.toast("Configurações salvas.");
-      if (pagina.id === "geral" || pagina.id === "marca") estado.f.aoMudarMarca?.();
+      if (pagina.id === "geral" || pagina.id === "marca") { estado.servidor = null; estado.f.aoMudarMarca?.(); }
     } catch (erro) { status.textContent = erro.message; }
   });
 }
@@ -223,6 +248,7 @@ async function telaVisaoGeral(alvo, cabecalho) {
 async function telaUsuarios(alvo, cabecalho) {
   const e = estado.f.escapeHtml;
   const { usuarios, voce } = await estado.f.api("/api/painel/usuarios");
+  estado.bibliotecas = (await estado.f.api("/api/painel/bibliotecas")).bibliotecas;
   alvo.innerHTML = cabecalho() + `<section class="painel-cartao"><div class="painel-usuarios">${usuarios.map((u) => `
     <button type="button" class="painel-usuario${u.desativado ? " desativado" : ""}" data-usuario="${e(u.usuario)}">
       <span class="painel-avatar">${e(u.nome.charAt(0).toUpperCase())}</span><strong>${e(u.nome)}</strong>
@@ -244,6 +270,14 @@ function editarUsuario(alvo, u, voce) {
     <label class="painel-campo"><span>Número máximo de sessões de usuários simultâneas</span><input type="number" name="maxSessoes" min="0" max="100" value="${u.maxSessoes}"></label>
     <label class="painel-campo"><span>Acesso às salas (SyncPlay)</span><select name="acessoSalas">${[["criar", "Permitir que o usuário crie e participe em grupos"], ["participar", "Permitir que o usuário participe de grupos"], ["nenhum", "Desativado para esse usuário"]].map(([v, r]) => `<option value="${v}" ${u.acessoSalas === v ? "selected" : ""}>${r}</option>`).join("")}</select></label>
     <small class="painel-ajuda">Ocultar, bitrate, sessões e salas: ainda não implementados no PugotiCine (são salvos).</small>
+    <h3>Acesso à Biblioteca</h3>
+    <label class="painel-campo painel-check"><input type="checkbox" name="todasBibliotecas" ${u.todasBibliotecas ? "checked" : ""}><span>Ativar o acesso a todas as bibliotecas</span></label>
+    <div class="painel-multipla" data-bibliotecas-usuario>${(estado.bibliotecas ?? []).map((b) => `<label class="painel-check"><input type="checkbox" value="${e(b.id)}" ${u.bibliotecas.includes(b.id) ? "checked" : ""}><span>${e(b.nome)}</span></label>`).join("")}</div>
+    <small class="painel-ajuda">Selecione as bibliotecas para compartilhar com este usuário. Tem efeito: o usuário só vê e só abre o que estiver liberado (administradores veem tudo).</small>
+    <h3>Classificações Etárias</h3>
+    <label class="painel-campo"><span>Classificação etária máxima permitida</span><select name="classificacaoMaxima">${[["", "Sem limite"], ["0", "Livre"], ["10", "10 anos"], ["12", "12 anos"], ["14", "14 anos"], ["16", "16 anos"], ["18", "18 anos"]].map(([v, r]) => `<option value="${v}" ${String(u.classificacaoMaxima ?? "") === v ? "selected" : ""}>${r}</option>`).join("")}</select></label>
+    <small class="painel-ajuda">Conteúdo com classificação maior será ocultado do usuário (pela classificação do Radarr, ex.: PG-13 = 13 anos).</small>
+    <label class="painel-campo painel-check"><input type="checkbox" name="bloquearSemClassificacao" ${u.bloquearSemClassificacao ? "checked" : ""}><span>Bloquear itens com avaliação desconhecida ou sem avaliação</span></label>
     <div class="painel-acoes"><button type="submit" class="painel-botao primario">Salvar</button><button type="button" class="painel-botao" data-cancelar>Cancelar</button>${u.usuario !== voce ? '<button type="button" class="painel-botao perigo" data-excluir-usuario>Excluir Usuário</button>' : ""}<span class="painel-status" data-painel-status></span></div></section></form>`;
   const form = area.querySelector("form");
   form.querySelector("[data-cancelar]").addEventListener("click", () => { area.innerHTML = ""; });
@@ -254,7 +288,9 @@ function editarUsuario(alvo, u, voce) {
   });
   form.addEventListener("submit", async (ev) => {
     ev.preventDefault();
-    const dados = { oculto: form.oculto.checked, limiteBitrateMbps: form.limiteBitrateMbps.value, maxSessoes: form.maxSessoes.value, acessoSalas: form.acessoSalas.value };
+    const dados = { oculto: form.oculto.checked, limiteBitrateMbps: form.limiteBitrateMbps.value, maxSessoes: form.maxSessoes.value, acessoSalas: form.acessoSalas.value,
+      todasBibliotecas: form.todasBibliotecas.checked, bibliotecas: [...form.querySelectorAll("[data-bibliotecas-usuario] input:checked")].map((i) => i.value),
+      classificacaoMaxima: form.classificacaoMaxima.value === "" ? null : Number(form.classificacaoMaxima.value), bloquearSemClassificacao: form.bloquearSemClassificacao.checked };
     if (!form.desativado.disabled) dados.desativado = form.desativado.checked;
     const r = await fetch(`/api/painel/usuarios/${encodeURIComponent(u.usuario)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(dados) });
     const corpo = await r.json();
@@ -265,13 +301,77 @@ function editarUsuario(alvo, u, voce) {
 
 async function telaBibliotecas(alvo, cabecalho) {
   const e = estado.f.escapeHtml;
-  const { bibliotecas } = await estado.f.api("/api/painel/bibliotecas");
-  alvo.innerHTML = cabecalho(`<div class="painel-acoes-topo"><button type="button" class="painel-botao" disabled title="Ainda não implementado no PugotiCine">Adicionar Biblioteca de Mídia</button><button type="button" class="painel-botao primario" data-rastrear>Rastrear Todas as Bibliotecas</button></div>`)
-    + `<div class="painel-bibliotecas">${bibliotecas.map((b) => `<section class="painel-cartao painel-biblioteca-cartao"><div class="painel-biblioteca-icone">${icone("Bibliotecas")}</div><h3>${e(b.nome)}</h3><code>${e(b.caminho)}</code><span>${b.itens} itens · tipo de conteúdo: Filmes</span><span>Última varredura ${e(relativo(b.ultimaVarredura))}</span></section>`).join("")}</div>`;
+  const dados = await estado.f.api("/api/painel/bibliotecas");
+  const tipo = (v) => dados.tipos.find((x) => x.valor === v)?.rotulo ?? v;
+  alvo.innerHTML = cabecalho(`<div class="painel-acoes-topo"><button type="button" class="painel-botao" data-adicionar-biblioteca>Adicionar Biblioteca de Mídia</button><button type="button" class="painel-botao primario" data-rastrear>Rastrear Todas as Bibliotecas</button></div>`)
+    + `<div data-editor-biblioteca></div><div class="painel-bibliotecas">${dados.bibliotecas.map((b) => `<section class="painel-cartao painel-biblioteca-cartao${b.ativa ? "" : " inativa"}" data-biblioteca="${e(b.id)}">
+      <div class="painel-biblioteca-icone">${icone("Bibliotecas")}</div><h3>${e(b.nome)}</h3><span>${e(tipo(b.tipo))} · ${b.itens} itens${b.ativa ? "" : " · desativada"}${b.monitorar ? " · monitorada" : ""}</span>
+      ${b.pastas.map((p) => `<code>${e(p)}</code>`).join("")}<span>Última varredura ${e(relativo(b.ultimaVarredura))}</span>
+      <div class="painel-acoes-linha"><button type="button" class="painel-botao pequeno" data-rastrear-biblioteca="${e(b.id)}">Rastrear biblioteca</button><button type="button" class="painel-botao pequeno" data-editar-biblioteca="${e(b.id)}">Editar</button><button type="button" class="painel-botao pequeno perigo" data-remover-biblioteca="${e(b.id)}">Remover</button></div></section>`).join("") || '<p class="painel-vazio">Nenhuma biblioteca.</p>'}</div>`;
   alvo.querySelector("[data-rastrear]").addEventListener("click", async (ev) => {
     ev.currentTarget.disabled = true; ev.currentTarget.textContent = "Rastreando...";
     await estado.f.api("/api/painel/bibliotecas/rastrear", { method: "POST", body: "{}" });
     estado.f.toast("Bibliotecas rastreadas.");
+    mostrarPagina();
+  });
+  alvo.querySelectorAll("[data-rastrear-biblioteca]").forEach((b) => b.addEventListener("click", async () => {
+    b.disabled = true; b.textContent = "Rastreando...";
+    await estado.f.api(`/api/painel/bibliotecas/${b.dataset.rastrearBiblioteca}/rastrear`, { method: "POST", body: "{}" });
+    estado.f.toast("Biblioteca rastreada.");
+    mostrarPagina();
+  }));
+  alvo.querySelectorAll("[data-remover-biblioteca]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("Deseja realmente remover esta biblioteca? Os arquivos não serão apagados.")) return;
+    await fetch(`/api/painel/bibliotecas/${b.dataset.removerBiblioteca}`, { method: "DELETE" });
+    mostrarPagina();
+  }));
+  alvo.querySelector("[data-adicionar-biblioteca]").addEventListener("click", () => editarBiblioteca(alvo, dados, null));
+  alvo.querySelectorAll("[data-editar-biblioteca]").forEach((b) => b.addEventListener("click", () => editarBiblioteca(alvo, dados, dados.bibliotecas.find((x) => x.id === b.dataset.editarBiblioteca))));
+}
+
+function editarBiblioteca(alvo, dados, b) {
+  const e = estado.f.escapeHtml;
+  const area = alvo.querySelector("[data-editor-biblioteca]");
+  const pastas = [...(b?.pastas ?? [])];
+  area.innerHTML = `<form class="painel-form painel-cartao" data-form-biblioteca><h3>${b ? `Editar: ${e(b.nome)}` : "Adicionar Biblioteca de Mídia"}</h3>
+    <label class="painel-campo"><span>Tipo de conteúdo</span><select name="tipo">${dados.tipos.map((t) => `<option value="${t.valor}" ${(b?.tipo ?? "movies") === t.valor ? "selected" : ""}>${e(t.rotulo)}</option>`).join("")}</select></label>
+    <label class="painel-campo"><span>Nome para exibição</span><input name="nome" maxlength="80" value="${e(b?.nome ?? "")}"></label>
+    <div class="painel-campo"><span>Pastas</span><div data-lista-pastas></div><button type="button" class="painel-botao pequeno" data-escolher-pasta>Adicionar pasta</button><div data-seletor-pasta></div></div>
+    <small class="painel-ajuda">Pastas permitidas: ${dados.raizesPermitidas.map(e).join(", ")}.</small>
+    <h3>Opções da biblioteca</h3>
+    <label class="painel-campo painel-check"><input type="checkbox" name="ativa" ${b?.ativa ?? true ? "checked" : ""}><span>Ativar esta biblioteca</span></label>
+    <label class="painel-campo painel-check"><input type="checkbox" name="monitorar" ${b?.monitorar ? "checked" : ""}><span>Ativar monitoramento em tempo real</span></label><small class="painel-ajuda">As alterações nos arquivos serão processadas imediatamente em sistemas de arquivos suportados.</small>
+    <label class="painel-campo"><span>Idioma preferido de download</span><select name="idiomaMetadados">${[["pt", "Português"], ["en", "English"], ["es", "Español"], ["ja", "日本語"]].map(([v, r]) => `<option value="${v}" ${(b?.idiomaMetadados ?? "pt") === v ? "selected" : ""}>${r}</option>`).join("")}</select></label>
+    <label class="painel-campo"><span>País/Região</span><select name="paisMetadados">${[["BR", "Brasil"], ["PT", "Portugal"], ["US", "Estados Unidos"], ["JP", "Japão"]].map(([v, r]) => `<option value="${v}" ${(b?.paisMetadados ?? "BR") === v ? "selected" : ""}>${r}</option>`).join("")}</select></label>
+    <label class="painel-campo"><span>Atualizar automaticamente os metadados da internet</span><select name="intervaloAtualizacaoDias">${[[0, "Nunca"], [30, "A cada 30 dias"], [60, "A cada 60 dias"], [90, "A cada 90 dias"]].map(([v, r]) => `<option value="${v}" ${(b?.intervaloAtualizacaoDias ?? 0) === v ? "selected" : ""}>${r}</option>`).join("")}</select></label>
+    <small class="painel-ajuda">Idioma, país e atualização automática: ainda não implementados no PugotiCine (são salvos).</small>
+    <div class="painel-acoes"><button type="submit" class="painel-botao primario">${b ? "Salvar" : "Adicionar"}</button><button type="button" class="painel-botao" data-cancelar>Cancelar</button><span class="painel-status" data-painel-status></span></div></form>`;
+  const form = area.querySelector("form");
+  const desenharPastas = () => {
+    form.querySelector("[data-lista-pastas]").innerHTML = pastas.length
+      ? pastas.map((p, i) => `<div class="painel-pasta"><code>${e(p)}</code><button type="button" class="painel-botao pequeno perigo" data-tirar-pasta="${i}">Remover</button></div>`).join("")
+      : '<p class="painel-vazio">Nenhuma pasta.</p>';
+    form.querySelectorAll("[data-tirar-pasta]").forEach((x) => x.addEventListener("click", () => { pastas.splice(Number(x.dataset.tirarPasta), 1); desenharPastas(); }));
+  };
+  desenharPastas();
+  const seletor = form.querySelector("[data-seletor-pasta]");
+  const navegar = async (caminho) => {
+    const r = await estado.f.api(`/api/painel/pastas${caminho ? `?caminho=${encodeURIComponent(caminho)}` : ""}`);
+    seletor.innerHTML = `<div class="painel-seletor"><div class="painel-seletor-topo"><strong>${e(r.caminho ?? "Pastas de mídia")}</strong>${r.caminho ? `<button type="button" class="painel-botao pequeno primario" data-usar-pasta>Selecionar esta pasta</button>` : ""}</div>
+      ${r.pai || r.caminho ? `<button type="button" class="painel-seletor-item" data-ir-pasta="${e(r.pai ?? "")}">⬑ Subir</button>` : ""}${r.pastas.map((p) => `<button type="button" class="painel-seletor-item" data-ir-pasta="${e(p)}">📁 ${e(p.split("/").pop())}</button>`).join("") || '<p class="painel-vazio">Sem subpastas.</p>'}</div>`;
+    seletor.querySelectorAll("[data-ir-pasta]").forEach((x) => x.addEventListener("click", () => navegar(x.dataset.irPasta)));
+    seletor.querySelector("[data-usar-pasta]")?.addEventListener("click", () => { if (!pastas.includes(r.caminho)) pastas.push(r.caminho); seletor.innerHTML = ""; desenharPastas(); });
+  };
+  form.querySelector("[data-escolher-pasta]").addEventListener("click", () => navegar(null));
+  form.querySelector("[data-cancelar]").addEventListener("click", () => { area.innerHTML = ""; });
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const corpo = { nome: form.nome.value, tipo: form.tipo.value, pastas, ativa: form.ativa.checked, monitorar: form.monitorar.checked,
+      idiomaMetadados: form.idiomaMetadados.value, paisMetadados: form.paisMetadados.value, intervaloAtualizacaoDias: Number(form.intervaloAtualizacaoDias.value) };
+    const r = await fetch(b ? `/api/painel/bibliotecas/${b.id}` : "/api/painel/bibliotecas", { method: b ? "PUT" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(corpo) });
+    const resposta = await r.json();
+    if (!r.ok) { form.querySelector("[data-painel-status]").textContent = resposta.error; return; }
+    estado.f.toast(b ? "Biblioteca salva." : "Biblioteca adicionada.");
     mostrarPagina();
   });
 }
@@ -308,12 +408,22 @@ async function telaAtividade(alvo, cabecalho) {
 }
 
 async function telaTvAoVivo(alvo, cabecalho) {
-  alvo.innerHTML = cabecalho() + `<section class="painel-cartao"><h3>Sintonizadores</h3><p class="painel-vazio">Nenhum sintonizador.</p><button type="button" class="painel-botao" disabled>Adicionar sintonizador</button></section>
+  alvo.innerHTML = cabecalho() + `<section class="painel-cartao" data-tv-indisponivel><h3>Sintonizadores</h3><p class="painel-vazio">Nenhum sintonizador.</p>
+    <p class="painel-ajuda">Sintonizador M3U/HDHomeRun e guia XMLTV: ainda não implementados no PugotiCine. Para assistir canais ao vivo o player precisa tocar transmissões contínuas, o que ainda não existe; adicionar um sintonizador agora só criaria uma lista que não toca. Por isso os botões estão desativados.</p>
+    <button type="button" class="painel-botao" disabled>Adicionar sintonizador</button></section>
     <section class="painel-cartao"><h3>Provedores de Dados do Guia da TV</h3><p class="painel-vazio">Nenhum provedor.</p><button type="button" class="painel-botao" disabled>Adicionar provedor</button> <button type="button" class="painel-botao" disabled>Atualizar Dados do Guia</button></section>`;
 }
 
 function listaPlugins() {
-  return `<section class="painel-cartao" data-painel-plugins><div class="painel-filtros"><button type="button" class="painel-filtro ativo">Todos</button><button type="button" class="painel-filtro">Instalado</button><button type="button" class="painel-filtro">Disponível</button></div><p class="painel-vazio">Nenhum plugin instalado.</p></section>`;
+  const integracoes = [
+    ["Login do PugotiLab", "Contas, senhas e sessões vêm do PugotiLab (no Jellyfin seria um plugin de autenticação)."],
+    ["Metadados do Radarr", "Sinopse, pôster, notas e classificação dos filmes (no Jellyfin seriam os plugins TMDb/OMDb)."],
+    ["Nomes de séries e animes", "Temporada e episódio pelas regras de nomes do Jellyfin."]
+  ];
+  return `<section class="painel-cartao" data-painel-plugins><h3>Meus Plugins</h3><p class="painel-vazio">Nenhum plugin instalado.</p>
+    <h3>Catálogo</h3><p class="painel-ajuda" data-catalogo-indisponivel>Catálogo indisponível: os plugins do Jellyfin são bibliotecas .NET e o PugotiCine roda em Node, então eles não podem ser instalados aqui. Os repositórios abaixo são só salvos.</p>
+    <h3>Integrações embutidas</h3><p class="painel-ajuda">Fazem parte do PugotiCine (não são plugins e não podem ser desinstaladas):</p>
+    ${integracoes.map(([nome, texto]) => `<div class="painel-pasta"><span><strong>${nome}</strong><small class="painel-ajuda">${texto}</small></span></div>`).join("")}</section>`;
 }
 
 async function telaChaves(alvo, cabecalho) {
@@ -342,8 +452,12 @@ async function telaChaves(alvo, cabecalho) {
 
 async function telaBackups(alvo, cabecalho) {
   const e = estado.f.escapeHtml;
-  const { backups } = await estado.f.api("/api/painel/backups");
-  alvo.innerHTML = cabecalho(`<button type="button" class="painel-botao primario" data-criar-backup>Criar backup</button>`) + `<section class="painel-cartao">${tabela(["Arquivo", "Tamanho", "Criado em", ""],
+  const { backups, restauracaoPendente: pendente } = await estado.f.api("/api/painel/backups");
+  const aviso = pendente ? `<section class="painel-cartao painel-aviso-restauracao" data-restauracao-pendente><h3>Restauração agendada</h3>
+    <p>O backup <strong>${e(pendente.backup)}</strong> será aplicado quando o PugotiCine reiniciar. Reinicie o container para concluir (no ZimaOS: reiniciar o app PugotiCine).</p>
+    <p class="painel-ajuda">Antes foi criado o backup de segurança <strong>${e(pendente.seguranca)}</strong>, para voltar atrás se precisar.</p>
+    <div class="painel-acoes"><button type="button" class="painel-botao" data-cancelar-restauracao>Cancelar restauração</button></div></section>` : "";
+  alvo.innerHTML = cabecalho(`<button type="button" class="painel-botao primario" data-criar-backup>Criar backup</button>`) + aviso + `<section class="painel-cartao">${tabela(["Arquivo", "Tamanho", "Criado em", ""],
     backups.map((b) => `<tr data-backup="${e(b.nome)}"><td>${e(b.nome)}</td><td>${bytes(b.tamanho)}</td><td>${e(data(b.criadoEm))}</td><td class="painel-acoes-linha"><a class="painel-botao pequeno" href="/api/painel/backups/${encodeURIComponent(b.nome)}" download>Baixar</a><button type="button" class="painel-botao pequeno" data-restaurar="${e(b.nome)}">Restaurar</button><button type="button" class="painel-botao pequeno perigo" data-excluir-backup="${e(b.nome)}">Excluir</button></td></tr>`),
     "Nenhum backup ainda.")}</section>`;
   alvo.querySelector("[data-criar-backup]").addEventListener("click", async (ev) => {
@@ -353,9 +467,19 @@ async function telaBackups(alvo, cabecalho) {
     mostrarPagina();
   });
   alvo.querySelectorAll("[data-restaurar]").forEach((b) => b.addEventListener("click", async () => {
-    const r = await fetch(`/api/painel/backups/${encodeURIComponent(b.dataset.restaurar)}/restaurar`, { method: "POST" });
-    estado.f.toast((await r.json()).error ?? "Restauração concluída com sucesso");
+    const nome = b.dataset.restaurar;
+    const digitado = prompt(`Restaurar substitui TODOS os dados atuais (progresso, usuários, bibliotecas, configurações e salas) pelos do backup.\nUm backup de segurança será criado antes.\n\nPara confirmar, digite o nome do backup:\n${nome}`);
+    if (digitado === null) return;
+    const r = await fetch(`/api/painel/backups/${encodeURIComponent(nome)}/restaurar`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirmar: digitado.trim() }) });
+    const corpo = await r.json();
+    estado.f.toast(r.ok ? "Restauração agendada: reinicie o PugotiCine para aplicar." : corpo.error);
+    mostrarPagina();
   }));
+  alvo.querySelector("[data-cancelar-restauracao]")?.addEventListener("click", async () => {
+    await fetch("/api/painel/backups/restauracao", { method: "DELETE" });
+    estado.f.toast("Restauração cancelada.");
+    mostrarPagina();
+  });
   alvo.querySelectorAll("[data-excluir-backup]").forEach((b) => b.addEventListener("click", async () => {
     if (!confirm("Excluir este backup?")) return;
     await fetch(`/api/painel/backups/${encodeURIComponent(b.dataset.excluirBackup)}`, { method: "DELETE" });
@@ -379,15 +503,52 @@ async function listaRegistros(alvo) {
 
 async function telaTarefas(alvo, cabecalho) {
   const e = estado.f.escapeHtml;
+  if (estado.tarefaAberta) return telaTarefa(alvo, cabecalho, estado.tarefaAberta);
   const { tarefas } = await estado.f.api("/api/painel/tarefas");
   const resultado = { Completed: "Concluída", Failed: "Falhou" };
-  alvo.innerHTML = cabecalho() + ["Biblioteca", "Metadados"].map((categoria) => `<section class="painel-cartao"><h3>${categoria}</h3>${tarefas.filter((t) => t.categoria === categoria).map((t) => `
-    <div class="painel-tarefa-linha" data-tarefa="${t.id}"><div><strong>${e(t.nome)}</strong><small class="painel-ajuda">${e(t.descricao)}</small>
-      <small class="painel-ajuda">${t.executando ? "Executando..." : `Última execução ${e(relativo(t.ultimaExecucao))}${t.duracaoMs !== null ? `, levou ${(t.duracaoMs / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} s` : ""}${t.resultado ? ` · ${resultado[t.resultado]}` : ""} · a cada ${t.intervaloMinutos} min · próxima ${e(data(t.proximaExecucao))}`}</small>${t.erro ? `<small class="painel-erro">${e(t.erro)}</small>` : ""}</div>
-      <button type="button" class="painel-botao pequeno" data-executar="${t.id}" title="Executar agora" ${t.executando ? "disabled" : ""}>▶ Executar</button></div>`).join("")}</section>`).join("");
+  const duracao = (ms) => ms === null ? "" : ms < 1000 ? `${ms} ms` : `${(ms / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} s`;
+  const categorias = [...new Set(tarefas.map((t) => t.categoria))];
+  alvo.innerHTML = cabecalho() + categorias.map((categoria) => `<section class="painel-cartao"><h3>${e(categoria)}</h3>${tarefas.filter((t) => t.categoria === categoria).map((t) => `
+    <div class="painel-tarefa-linha" data-tarefa="${t.id}"><div><button type="button" class="painel-link" data-abrir-tarefa="${t.id}"><strong>${e(t.nome)}</strong></button><small class="painel-ajuda">${e(t.descricao)}</small>
+      <small class="painel-ajuda">${t.executando ? "Executando..." : t.ultimaExecucao ? `Última execução ${e(relativo(t.ultimaExecucao))}, demorando ${duracao(t.duracaoMs)}.${t.resultado ? ` ${resultado[t.resultado]}` : ""}${t.mensagem ? ` · ${e(t.mensagem)}` : ""}` : "Ainda não executada."}</small>
+      <small class="painel-ajuda">${t.gatilhosTexto.length ? e(t.gatilhosTexto.join(" · ")) : "Sem gatilhos (só manual)"}${t.proximaExecucao ? ` · próxima ${e(data(t.proximaExecucao))}` : ""}</small></div>
+      <button type="button" class="painel-botao pequeno" data-executar="${t.id}" title="Iniciar" ${t.executando ? "disabled" : ""}>▶ Iniciar</button></div>`).join("")}</section>`).join("");
   alvo.querySelectorAll("[data-executar]").forEach((b) => b.addEventListener("click", async () => {
     b.disabled = true; b.textContent = "Executando...";
     await estado.f.api(`/api/painel/tarefas/${b.dataset.executar}/executar`, { method: "POST", body: "{}" });
     mostrarPagina();
   }));
+  alvo.querySelectorAll("[data-abrir-tarefa]").forEach((b) => b.addEventListener("click", () => { estado.tarefaAberta = b.dataset.abrirTarefa; mostrarPagina(); }));
+}
+
+async function telaTarefa(alvo, cabecalho, id) {
+  const e = estado.f.escapeHtml;
+  const { tarefa, intervalos, dias } = await estado.f.api(`/api/painel/tarefas/${id}`);
+  const gatilhos = [...tarefa.gatilhos];
+  const salvar = async () => {
+    const r = await fetch(`/api/painel/tarefas/${id}/gatilhos`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ gatilhos }) });
+    const corpo = await r.json();
+    if (!r.ok) { estado.f.toast(corpo.error); return; }
+    estado.f.toast("Configurações salvas.");
+    mostrarPagina();
+  };
+  alvo.innerHTML = cabecalho(`<button type="button" class="painel-botao" data-voltar-tarefas>Voltar</button>`) + `<section class="painel-cartao" data-detalhe-tarefa="${e(id)}"><h3>${e(tarefa.nome)}</h3><p class="painel-ajuda">${e(tarefa.descricao)}</p>
+    <h3>Disparadores de Tarefa</h3>${tarefa.gatilhosTexto.length ? tarefa.gatilhosTexto.map((g, i) => `<div class="painel-pasta" data-gatilho="${i}"><span>${e(g)}</span><button type="button" class="painel-botao pequeno perigo" data-remover-gatilho="${i}">Excluir</button></div>`).join("") : '<p class="painel-vazio">Nenhum disparador: a tarefa só roda manualmente.</p>'}
+    <form class="painel-form" data-novo-gatilho><h3>Adicionar Gatilho</h3>
+      <label class="painel-campo"><span>Tipo de gatilho</span><select name="tipo"><option value="diario">Diário</option><option value="semanal">Semanal</option><option value="intervalo">Em um intervalo</option><option value="inicializacao">Na inicialização do aplicativo</option></select></label>
+      <label class="painel-campo" data-so="semanal"><span>Dia da semana</span><select name="dia">${dias.map((d, i) => `<option value="${i}">${e(d)}</option>`).join("")}</select></label>
+      <label class="painel-campo" data-so="diario semanal"><span>Hora</span><input type="time" name="hora" value="03:00"></label>
+      <label class="painel-campo" data-so="intervalo"><span>A cada</span><select name="intervaloMs">${intervalos.map((ms) => `<option value="${ms}">${ms >= 3_600_000 ? `${ms / 3_600_000} hora(s)` : `${ms / 60_000} minutos`}</option>`).join("")}</select></label>
+      <div class="painel-acoes"><button type="submit" class="painel-botao primario">Adicionar</button></div></form></section>`;
+  const form = alvo.querySelector("[data-novo-gatilho]");
+  const mostrarCampos = () => form.querySelectorAll("[data-so]").forEach((c) => { c.hidden = !c.dataset.so.split(" ").includes(form.tipo.value); });
+  form.tipo.addEventListener("change", mostrarCampos); mostrarCampos();
+  form.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const tipo = form.tipo.value;
+    gatilhos.push(tipo === "inicializacao" ? { tipo } : tipo === "intervalo" ? { tipo, intervaloMs: Number(form.intervaloMs.value) } : tipo === "diario" ? { tipo, hora: form.hora.value } : { tipo, dia: Number(form.dia.value), hora: form.hora.value });
+    salvar();
+  });
+  alvo.querySelectorAll("[data-remover-gatilho]").forEach((b) => b.addEventListener("click", () => { gatilhos.splice(Number(b.dataset.removerGatilho), 1); salvar(); }));
+  alvo.querySelector("[data-voltar-tarefas]").addEventListener("click", () => { estado.tarefaAberta = null; mostrarPagina(); });
 }

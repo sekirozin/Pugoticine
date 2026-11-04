@@ -53,8 +53,8 @@ export const PAGINAS: Pagina[] = [
       { chave: "CustomCss", tipo: "textoLongo", rotulo: "Código CSS personalizado", ajuda: "Aplica a sua estilização CSS personalizada para a interface web.", padrao: "", maximoTexto: 50000 }
     ] }]
   },
-  { id: "usuarios", titulo: "Usuários", grupo: "Servidor", especial: true, efeito: { tipo: "parcial", texto: "Lista quem já entrou (contas do PugotiLab). Desativar um usuário bloqueia o acesso de verdade. Limite de bitrate, sessões, SyncPlay e controle dos pais: " + NAO_IMPLEMENTADO }, secoes: [] },
-  { id: "bibliotecas", titulo: "Bibliotecas", grupo: "Servidor", pai: "Bibliotecas", especial: true, efeito: { tipo: "parcial", texto: "Rastrear funciona de verdade. Adicionar, renomear e remover bibliotecas: " + NAO_IMPLEMENTADO + " (depende do catálogo com várias bibliotecas)." }, secoes: [] },
+  { id: "usuarios", titulo: "Usuários", grupo: "Servidor", especial: true, efeito: { tipo: "parcial", texto: "Lista quem já entrou (contas do PugotiLab: nome, senha e login são do PugotiLab). Têm efeito de verdade: desativar, acesso por biblioteca e classificação etária máxima/bloquear sem classificação. Ocultar, limite de bitrate, sessões simultâneas e acesso às salas: " + NAO_IMPLEMENTADO }, secoes: [] },
+  { id: "bibliotecas", titulo: "Bibliotecas", grupo: "Servidor", pai: "Bibliotecas", especial: true, efeito: { tipo: "parcial", texto: "Adicionar, editar, remover e rastrear bibliotecas funciona de verdade (tipo, pastas, ativar e monitoramento em tempo real); séries e animes recebem o nome do episódio pelas regras do Jellyfin. Idioma/país dos metadados e atualização automática: " + NAO_IMPLEMENTADO + " Música e Livros: o PugotiCine só reproduz vídeo." }, secoes: [] },
   {
     id: "bibliotecas-exibicao", titulo: "Exibir", grupo: "Servidor", pai: "Bibliotecas", efeito: { tipo: "salvo", texto: NAO_IMPLEMENTADO },
     secoes: [{ campos: [
@@ -209,14 +209,14 @@ export const PAGINAS: Pagina[] = [
     ]
   },
   {
-    id: "plugins", titulo: "Plugins", grupo: "Plugins", especial: true, efeito: { tipo: "salvo", texto: "Plugins " + NAO_IMPLEMENTADO.toLowerCase() + " A lista de repositórios é salva." },
+    id: "plugins", titulo: "Plugins", grupo: "Plugins", especial: true, efeito: { tipo: "salvo", texto: "Plugins " + NAO_IMPLEMENTADO.toLowerCase() + " Os plugins do Jellyfin são .NET e não rodam no PugotiCine (Node); a tela lista as integrações embutidas e a lista de repositórios é só salva." },
     secoes: [{ titulo: "Gerenciar Repositórios", campos: [
       { chave: "PluginRepositories", tipo: "lista", rotulo: "Repositórios", ajuda: "Um endereço por linha.", padrao: ["https://repo.jellyfin.org/files/plugin/manifest.json"], validarItem: "url" }
     ] }]
   },
   {
     id: "redes", titulo: "Redes", grupo: "Avançado",
-    efeito: { tipo: "salvo", texto: NAO_IMPLEMENTADO + " Portas, HTTPS e acesso remoto do PugotiCine são definidos pelo Docker e pelo proxy do PugotiLab." },
+    efeito: { tipo: "parcial", texto: "Têm efeito de verdade: Redes LAN (vazio = faixas privadas e Tailscale), Proxies conhecidos, Permitir conexões remotas e o filtro de IP remoto (lista branca/negra); o próprio servidor sempre passa e não dá para salvar algo que bloqueie você. Portas, HTTPS, URL base, vínculo de endereço, IPv4/IPv6, descoberta e URIs publicados: " + NAO_IMPLEMENTADO + " (são definidos pelo Docker e pelo proxy do PugotiLab)." },
     secoes: [
       { titulo: "Configurações da localização do servidor", campos: [
         { chave: "InternalHttpPort", tipo: "numero", rotulo: "Número da porta local de HTTP", padrao: 8096, min: 1, max: 65535 },
@@ -225,7 +225,7 @@ export const PAGINAS: Pagina[] = [
         { chave: "BaseUrl", tipo: "texto", rotulo: "URL Base", padrao: "", maximoTexto: 200 },
         { chave: "LocalNetworkAddresses", tipo: "lista", rotulo: "Vincular a um endereço de rede local", ajuda: "Um endereço IP por linha.", padrao: [], validarItem: "ip" },
         { chave: "LocalNetworkSubnets", tipo: "lista", rotulo: "Redes LAN", ajuda: "Uma rede por linha, no formato CIDR (ex.: 192.168.1.0/24).", padrao: [], validarItem: "subrede" },
-        { chave: "KnownProxies", tipo: "lista", rotulo: "Proxies conhecidos", ajuda: "Um endereço por linha.", padrao: [] }
+        { chave: "KnownProxies", tipo: "lista", rotulo: "Proxies conhecidos", ajuda: "Um endereço ou rede por linha. Só destes o cabeçalho X-Forwarded-For é aceito.", padrao: [], validarItem: "subrede" }
       ] },
       { titulo: "Configurações HTTPS", campos: [
         { chave: "RequireHttps", tipo: "booleano", rotulo: "Necessita HTTPS", padrao: false },
@@ -234,7 +234,7 @@ export const PAGINAS: Pagina[] = [
       ] },
       { titulo: "Configurações de acesso remoto", campos: [
         { chave: "EnableRemoteAccess", tipo: "booleano", rotulo: "Permitir conexões remotas a este servidor", padrao: true },
-        { chave: "RemoteIPFilter", tipo: "lista", rotulo: "Filtro de endereço IP remoto", ajuda: "Um endereço ou rede por linha.", padrao: [] },
+        { chave: "RemoteIPFilter", tipo: "lista", rotulo: "Filtro de endereço IP remoto", ajuda: "Um endereço ou rede por linha. Vale só para quem não é da rede local.", padrao: [], validarItem: "subrede" },
         { chave: "IsRemoteIPFilterBlacklist", tipo: "selecao", rotulo: "Modo do filtro de endereço IP remoto", padrao: "false", opcoes: [sn("false", "Lista branca"), sn("true", "Lista negra")] },
         { chave: "PublicHttpPort", tipo: "numero", rotulo: "Número da porta pública de HTTP", padrao: 8096, min: 1, max: 65535 },
         { chave: "PublicHttpsPort", tipo: "numero", rotulo: "Número da porta pública de HTTPS", padrao: 8920, min: 1, max: 65535 }
@@ -252,7 +252,7 @@ export const PAGINAS: Pagina[] = [
     ]
   },
   { id: "chaves", titulo: "Chaves da API", grupo: "Avançado", especial: true, efeito: { tipo: "real", texto: "Chaves reais: dão acesso de administrador à API pelo cabeçalho X-PugotiCine-Token." }, secoes: [] },
-  { id: "backups", titulo: "Backups", grupo: "Avançado", especial: true, efeito: { tipo: "parcial", texto: "Criar, baixar e excluir backups funciona de verdade. Restaurar: " + NAO_IMPLEMENTADO.split(":")[0] + "." }, secoes: [] },
+  { id: "backups", titulo: "Backups", grupo: "Avançado", especial: true, efeito: { tipo: "real", texto: "Criar, baixar, excluir e restaurar funcionam de verdade. Restaurar valida o backup, cria antes um backup de segurança e troca os bancos na próxima inicialização do PugotiCine (reinicie o container). Mídias e configurações de ambiente não entram no backup." }, secoes: [] },
   {
     id: "registros", titulo: "Registros", grupo: "Avançado", especial: true,
     efeito: { tipo: "real", texto: "Arquivos de registro reais do processo do PugotiCine; o aviso de resposta lenta é aplicado de verdade." },
@@ -261,7 +261,7 @@ export const PAGINAS: Pagina[] = [
       { chave: "SlowResponseThresholdMs", tipo: "numero", rotulo: "Tempo em milissegundos para que uma resposta seja considerada lenta", padrao: 500, min: 50, max: 600000 }
     ] }]
   },
-  { id: "tarefas", titulo: "Tarefas Agendadas", grupo: "Avançado", especial: true, efeito: { tipo: "real", texto: "Tarefas reais do PugotiCine; executar agora roda a tarefa de verdade." }, secoes: [] }
+  { id: "tarefas", titulo: "Tarefas Agendadas", grupo: "Avançado", especial: true, efeito: { tipo: "real", texto: "Tarefas do Jellyfin que existem no PugotiCine (varredura, metadados, limpeza de atividade, logs e temporários, otimizar banco). Iniciar e os gatilhos (diário, semanal, intervalo, na inicialização) funcionam de verdade. Tarefas de imagens de capítulos, trickplay, legendas e plugins: ainda não implementadas no PugotiCine." }, secoes: [] }
 ];
 
 export class ErroValidacao extends Error {

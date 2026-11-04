@@ -4,30 +4,51 @@ import fs from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { MediaItem, PugotiProfile } from "../types.js";
 import { BancoPainel } from "./banco.js";
+import { GerenciadorBibliotecas, TIPOS_BIBLIOTECA, usuarioPodeVer, type Biblioteca } from "./bibliotecas.js";
+import path from "node:path";
 import { Backups } from "./backups.js";
-import { ErroValidacao, PAGINAS, pagina } from "./configuracao.js";
+import { ErroValidacao, PAGINAS, pagina, validar } from "./configuracao.js";
+import { filtroDeRede } from "./redes.js";
 import { disco, infoServidor, montarPainel, type RegistroAtividade } from "./painel.js";
 import { Registros } from "./registros.js";
+import { Agendador, DIAS, INTERVALOS_MS, descreverGatilho } from "./tarefas.js";
 
 type Json = (res: ServerResponse, status: number, corpo: unknown) => void;
 type Corpo = <T>(req: IncomingMessage) => Promise<T>;
 export interface ContextoPainel {
   banco: BancoPainel; registros: Registros; backups: Backups; json: Json; corpo: Corpo;
+  bibliotecas: GerenciadorBibliotecas; raizesPermitidas: string[];
   catalogo: () => MediaItem[]; ultimaVarredura: () => string; atividadeProgresso: () => RegistroAtividade[];
   varrer: () => Promise<number>; atualizarMetadados: () => Promise<void>;
   intervaloMs: number; raizMidia: string; pastaDados: string; ffmpeg: string; versao: string;
 }
-interface EstadoTarefa { ultimaExecucao: string | null; duracaoMs: number | null; resultado: "Completed" | "Failed" | null; erro: string | null; executando: boolean }
 
 const CABECALHOS_CHAVE = ["x-pugoticine-token", "x-emby-token", "x-mediabrowser-token"];
 
 export class RotasPainel {
   private readonly ultimosRegistros = new Map<string, number>();
-  readonly tarefas: Record<"varredura" | "metadados", EstadoTarefa> = {
-    varredura: { ultimaExecucao: null, duracaoMs: null, resultado: null, erro: null, executando: false },
-    metadados: { ultimaExecucao: null, duracaoMs: null, resultado: null, erro: null, executando: false }
-  };
-  constructor(private readonly c: ContextoPainel) {}
+  readonly agendador: Agendador;
+  constructor(private readonly c: ContextoPainel) {
+    // Tarefas do Jellyfin que existem no PugotiCine (nomes e categorias do Localization/Core/pt-BR.json).
+    this.agendador = new Agendador(c.banco.db, (t, ok, mensagem) => c.banco.registrar(ok ? "TaskCompleted" : "TaskFailed", `${t.nome} ${ok ? "concluída" : "falhou"}`, null, mensagem ?? "", ok ? "Information" : "Error"));
+    const intervalo = { tipo: "intervalo" as const, intervaloMs: c.intervaloMs };
+    this.agendador.registrar({ id: "varredura", nome: "Escanear a Biblioteca de Mídia", categoria: "Biblioteca", descricao: "Escaneie a sua biblioteca de mídia para arquivos novos e atualize os metadados.",
+      gatilhosPadrao: [intervalo], executar: async () => `${await c.varrer()} item(ns) no catálogo` });
+    this.agendador.registrar({ id: "metadados", nome: "Atualizar metadados do Radarr", categoria: "Biblioteca", descricao: "Busca sinopse, pôster, notas e classificação dos filmes no Radarr.",
+      gatilhosPadrao: [intervalo], executar: async () => { await c.atualizarMetadados(); } });
+    this.agendador.registrar({ id: "limpar-atividade", nome: "Limpar Registro de Atividades", categoria: "Manutenção", descricao: "Apaga o registro de atividades mais antigo que a idade configurada (30 dias).",
+      gatilhosPadrao: [{ tipo: "intervalo", intervaloMs: 24 * 3_600_000 }], executar: async () => `${c.banco.limparAtividade(30)} evento(s) apagado(s)` });
+    this.agendador.registrar({ id: "limpar-registros", nome: "Limpar pasta de logs", categoria: "Manutenção", descricao: "Deletar arquivos de registro com mais de 7 dias.",
+      gatilhosPadrao: [{ tipo: "intervalo", intervaloMs: 24 * 3_600_000 }], executar: async () => `${c.registros.limpar()} arquivo(s) apagado(s)` });
+    this.agendador.registrar({ id: "limpar-temporarios", nome: "Limpar Arquivos Temporários", categoria: "Manutenção", descricao: "Deletar arquivos temporários que não são mais necessários para o sistema.",
+      gatilhosPadrao: [{ tipo: "intervalo", intervaloMs: 24 * 3_600_000 }], executar: async () => `${limparTemporarios(c.backups.pasta)} item(ns) apagado(s)` });
+    this.agendador.registrar({ id: "otimizar-banco", nome: "Otimizar base de dados", categoria: "Manutenção", descricao: "Compactar base de dados e liberar espaço livre.",
+      gatilhosPadrao: [{ tipo: "intervalo", intervaloMs: 6 * 3_600_000 }], executar: async () => {
+        const antes = fs.statSync(c.banco.arquivo).size;
+        c.banco.db.exec("PRAGMA optimize; VACUUM;");
+        return `painel.db: ${Math.round(antes / 1024)} KB → ${Math.round(fs.statSync(c.banco.arquivo).size / 1024)} KB`;
+      } });
+  }
 
   /** Perfil de administrador para quem chama a API com uma chave válida (Chaves da API). */
   perfilPorChave(req: IncomingMessage): PugotiProfile | null {
@@ -52,6 +73,19 @@ export class RotasPainel {
     return this.c.banco.usuario(perfil.username)?.desativado ? "Sua conta está desativada neste servidor. Fale com o administrador." : null;
   }
 
+  /** Usuários › Acesso à biblioteca e Controle dos pais: administrador vê tudo. */
+  /** Painel › Redes: decide se a conexão pode entrar (chamado antes de qualquer rota, até dos arquivos estáticos). */
+  private filtroRede: ReturnType<typeof filtroDeRede> | null = null;
+  acessoDeRede(req: IncomingMessage) {
+    this.filtroRede ??= filtroDeRede(this.c.banco.ler("redes"));
+    return this.filtroRede(req.socket.remoteAddress ?? "", req.headers["x-forwarded-for"]);
+  }
+
+  podeVer(perfil: PugotiProfile, item: MediaItem): boolean {
+    if (perfil.role === "admin") return true;
+    return usuarioPodeVer(this.c.banco.usuario(perfil.username), item as MediaItem & { bibliotecaId?: string });
+  }
+
   registrarReproducao(perfil: PugotiProfile, media: MediaItem): void {
     this.c.banco.registrar("VideoPlayback", `${perfil.displayName} está reproduzindo ${media.title}`, perfil.username);
   }
@@ -68,43 +102,25 @@ export class RotasPainel {
     return r.EnableSlowResponseWarning ? Number(r.SlowResponseThresholdMs) : null;
   }
 
-  async executarTarefa(id: "varredura" | "metadados"): Promise<EstadoTarefa> {
-    const t = this.tarefas[id];
-    if (t.executando) return t;
-    t.executando = true;
-    const inicio = Date.now();
-    try {
-      if (id === "varredura") { const n = await this.c.varrer(); this.c.banco.registrar("TaskCompleted", `Varrer a biblioteca de mídia concluída: ${n} filme(s)`); }
-      else { await this.c.atualizarMetadados(); this.c.banco.registrar("TaskCompleted", "Atualizar metadados do Radarr concluída"); }
-      t.resultado = "Completed"; t.erro = null;
-    } catch (erro) {
-      t.resultado = "Failed"; t.erro = erro instanceof Error ? erro.message : String(erro);
-      this.c.banco.registrar("TaskFailed", `${id === "varredura" ? "Varrer a biblioteca de mídia" : "Atualizar metadados do Radarr"} falhou`, null, t.erro, "Error");
-    } finally {
-      t.executando = false; t.ultimaExecucao = new Date().toISOString(); t.duracaoMs = Date.now() - inicio;
-    }
-    return t;
-  }
+  /** Mantido para quem chamava a tarefa direto (varredura da biblioteca e metadados). */
+  async executarTarefa(id: string) { return this.agendador.executar(id); }
+  iniciarAgendador(): void { this.agendador.iniciar(); }
+  pararAgendador(): void { this.agendador.parar(); }
 
   private visaoGeral() {
     const geral = this.c.banco.ler("geral");
     const servidor = { ...infoServidor(this.c.versao, this.c.ffmpeg), nome: String(geral.ServerName) };
-    return montarPainel({ catalogo: this.c.catalogo(), ultimaVarredura: this.c.ultimaVarredura(), intervaloVarreduraMs: this.c.intervaloMs,
+    const visao = montarPainel({ catalogo: this.c.catalogo(), ultimaVarredura: this.c.ultimaVarredura(), intervaloVarreduraMs: this.c.intervaloMs,
       raizMidia: this.c.raizMidia, atividade: this.c.atividadeProgresso(), agora: new Date(), servidor,
       discos: [disco(this.c.raizMidia, "Mídia"), disco(this.c.pastaDados, "Dados do PugotiCine")] });
+    const tipos = Object.fromEntries(TIPOS_BIBLIOTECA.map(x => [x.valor, x.rotulo]));
+    visao.bibliotecas = this.c.bibliotecas.bibliotecas().map(b => ({ nome: b.nome, tipo: tipos[b.tipo], caminho: b.pastas.join(", "), itens: b.itens,
+      ultimaVarredura: b.ultimaVarredura, proximaVarredura: visao.bibliotecas[0]?.proximaVarredura ?? null }));
+    return visao;
   }
 
   private listaTarefas() {
-    const proxima = (t: EstadoTarefa) => {
-      const base = t.ultimaExecucao ?? this.c.ultimaVarredura();
-      return base ? new Date(Date.parse(base) + this.c.intervaloMs).toISOString() : null;
-    };
-    return ([["varredura", "Varrer a biblioteca de mídia", "Biblioteca", "Procura arquivos novos ou removidos na pasta de filmes."],
-      ["metadados", "Atualizar metadados do Radarr", "Metadados", "Busca sinopse, pôster e notas dos filmes no Radarr."]] as const).map(([id, nome, categoria, descricao]) => {
-      const t = this.tarefas[id];
-      return { id, nome, categoria, descricao, intervaloMinutos: Math.round(this.c.intervaloMs / 60000), ...t,
-        ultimaExecucao: t.ultimaExecucao ?? (this.c.ultimaVarredura() || null), proximaExecucao: proxima(t) };
-    });
+    return this.agendador.lista().map(t => ({ ...t, gatilhosTexto: t.gatilhos.map(descreverGatilho) }));
   }
 
   /** Trata as rotas do Painel; devolve true se a requisição era dele. */
@@ -113,7 +129,7 @@ export class RotasPainel {
     const caminho = url.pathname;
     if (caminho === "/api/marca" && req.method === "GET") {
       const marca = banco.ler("marca"), geral = banco.ler("geral");
-      json(res, 200, { nomeServidor: geral.ServerName, cssPersonalizado: marca.CustomCss });
+      json(res, 200, { nomeServidor: geral.ServerName, cssPersonalizado: marca.CustomCss, versao: this.c.versao });
       return true;
     }
     if (!caminho.startsWith("/api/painel") && caminho !== "/api/configuracao/reproducao") return false;
@@ -133,7 +149,13 @@ export class RotasPainel {
         if (!p || !p.secoes.length) { json(res, 404, { error: "Página sem configurações." }); return true; }
         if (metodo === "GET") { json(res, 200, { pagina: p, valores: banco.ler(p.id) }); return true; }
         if (metodo === "PUT") {
-          const valores = banco.salvar(p.id, await this.c.corpo<Record<string, unknown>>(req));
+          const entrada = await this.c.corpo<Record<string, unknown>>(req);
+          if (p.id === "redes") {
+            const depois = filtroDeRede(validar(p, entrada, banco.ler(p.id)))(req.socket.remoteAddress ?? "", req.headers["x-forwarded-for"]);
+            if (!depois.permitido) { json(res, 400, { error: `Esta configuração bloquearia o seu próprio acesso (${depois.ip}: ${depois.motivo}).` }); return true; }
+          }
+          const valores = banco.salvar(p.id, entrada);
+          if (p.id === "redes") this.filtroRede = null;
           banco.registrar("ConfigurationUpdated", `Configuração alterada: ${p.titulo}`, perfil.username);
           json(res, 200, { pagina: p, valores });
           return true;
@@ -183,7 +205,12 @@ export class RotasPainel {
         json(res, ok ? 200 : 404, { ok });
         return true;
       }
-      if (caminho === "/api/painel/backups" && metodo === "GET") { json(res, 200, { backups: this.c.backups.listar() }); return true; }
+      if (caminho === "/api/painel/backups" && metodo === "GET") { json(res, 200, { backups: this.c.backups.listar(), restauracaoPendente: this.c.backups.restauracaoPendente() }); return true; }
+      if (caminho === "/api/painel/backups/restauracao" && metodo === "DELETE") {
+        if (this.c.backups.cancelarRestauracao()) banco.registrar("BackupRestoreCanceled", "Restauração de backup cancelada", perfil.username);
+        json(res, 200, { restauracaoPendente: null });
+        return true;
+      }
       if (caminho === "/api/painel/backups" && metodo === "POST") {
         const backup = await this.c.backups.criar();
         banco.registrar("BackupCreated", `Backup criado: ${backup.nome}`, perfil.username);
@@ -192,7 +219,14 @@ export class RotasPainel {
       }
       r = m(/^\/api\/painel\/backups\/(pugoticine-backup-\d{14}\.tar)(\/restaurar)?$/);
       if (r) {
-        if (r[2] && metodo === "POST") { json(res, 501, { error: "Restaurar backup ainda não foi implementado no PugotiCine." }); return true; }
+        if (r[2] && metodo === "POST") {
+          const { confirmar } = await this.c.corpo<{ confirmar?: string }>(req).catch(() => ({ confirmar: undefined }));
+          if (confirmar !== r[1]) { json(res, 400, { error: "Confirme a restauração digitando o nome do backup." }); return true; }
+          const pedido = await this.c.backups.agendarRestauracao(r[1]);
+          banco.registrar("BackupRestoreScheduled", `Restauração agendada: ${r[1]}`, perfil.username, `Backup de segurança: ${pedido.seguranca}. Será aplicada ao reiniciar o PugotiCine.`, "Warning");
+          json(res, 200, { restauracaoPendente: pedido });
+          return true;
+        }
         const arquivo = this.c.backups.caminho(r[1]);
         if (!arquivo) { json(res, 404, { error: "Backup não encontrado." }); return true; }
         if (metodo === "GET") {
@@ -211,17 +245,67 @@ export class RotasPainel {
         res.end(texto);
         return true;
       }
-      if (caminho === "/api/painel/tarefas" && metodo === "GET") { json(res, 200, { tarefas: this.listaTarefas() }); return true; }
-      r = m(/^\/api\/painel\/tarefas\/(varredura|metadados)\/executar$/);
-      if (r && metodo === "POST") {
-        await this.executarTarefa(r[1] as "varredura" | "metadados");
-        json(res, 200, { tarefas: this.listaTarefas() });
+      if (caminho === "/api/painel/tarefas" && metodo === "GET") { json(res, 200, { tarefas: this.listaTarefas(), intervalos: INTERVALOS_MS, dias: DIAS }); return true; }
+      r = m(/^\/api\/painel\/tarefas\/([a-z-]{3,40})(\/executar|\/gatilhos)?$/);
+      if (r) {
+        if (r[2] === "/executar" && metodo === "POST") { await this.agendador.executar(r[1]); json(res, 200, { tarefas: this.listaTarefas() }); return true; }
+        if (r[2] === "/gatilhos" && metodo === "PUT") {
+          const { gatilhos } = await this.c.corpo<{ gatilhos?: unknown }>(req);
+          this.agendador.definirGatilhos(r[1], gatilhos);
+          banco.registrar("TaskTriggersUpdated", `Disparadores de tarefa alterados: ${this.agendador.estado(r[1]).nome}`, perfil.username);
+          json(res, 200, { tarefa: { ...this.agendador.estado(r[1]), gatilhosTexto: this.agendador.gatilhos(r[1]).map(descreverGatilho) } });
+          return true;
+        }
+        if (!r[2] && metodo === "GET") { json(res, 200, { tarefa: this.listaTarefas().find(t => t.id === r![1]) ?? null, intervalos: INTERVALOS_MS, dias: DIAS }); return true; }
+      }
+      // ---------- Bibliotecas (LibraryStructureController) ----------
+      const listaBibliotecas = () => ({ bibliotecas: this.c.bibliotecas.bibliotecas(), tipos: TIPOS_BIBLIOTECA, raizesPermitidas: this.c.raizesPermitidas });
+      if (caminho === "/api/painel/bibliotecas" && metodo === "GET") { json(res, 200, listaBibliotecas()); return true; }
+      if (caminho === "/api/painel/bibliotecas" && metodo === "POST") {
+        const b = this.c.bibliotecas.criar(await this.c.corpo<Partial<Biblioteca>>(req));
+        banco.registrar("LibraryCreated", `Biblioteca ${b.nome} adicionada`, perfil.username, b.pastas.join(", "));
+        json(res, 201, { biblioteca: b, ...listaBibliotecas() });
         return true;
       }
-      if (caminho === "/api/painel/bibliotecas" && metodo === "GET") { json(res, 200, { bibliotecas: this.visaoGeral().bibliotecas }); return true; }
       if (caminho === "/api/painel/bibliotecas/rastrear" && metodo === "POST") {
         await this.executarTarefa("varredura");
-        json(res, 200, { bibliotecas: this.visaoGeral().bibliotecas });
+        json(res, 200, listaBibliotecas());
+        return true;
+      }
+      r = m(/^\/api\/painel\/bibliotecas\/([a-z0-9-]{1,40})(\/rastrear)?$/);
+      if (r) {
+        const id = r[1];
+        if (r[2] && metodo === "POST") {
+          const n = this.c.bibliotecas.varrer(id);
+          banco.registrar("LibraryScanned", `Biblioteca ${this.c.bibliotecas.biblioteca(id)?.nome} rastreada: ${n} item(ns)`, perfil.username);
+          json(res, 200, listaBibliotecas());
+          return true;
+        }
+        if (metodo === "PUT") {
+          const b = this.c.bibliotecas.atualizar(id, await this.c.corpo<Partial<Biblioteca>>(req));
+          banco.registrar("LibraryUpdated", `Biblioteca ${b.nome} alterada`, perfil.username);
+          json(res, 200, { biblioteca: b, ...listaBibliotecas() });
+          return true;
+        }
+        if (metodo === "DELETE") {
+          const nome = this.c.bibliotecas.biblioteca(id)?.nome;
+          this.c.bibliotecas.remover(id);
+          banco.registrar("LibraryDeleted", `Biblioteca ${nome} removida (os arquivos não foram apagados)`, perfil.username);
+          json(res, 200, listaBibliotecas());
+          return true;
+        }
+      }
+      // Seletor de pastas (o "Selecionar Diretório" do Jellyfin), só dentro das pastas de mídia permitidas.
+      if (caminho === "/api/painel/pastas" && metodo === "GET") {
+        const pedido = url.searchParams.get("caminho");
+        if (!pedido) { json(res, 200, { caminho: null, pai: null, pastas: this.c.raizesPermitidas.filter(r => fs.existsSync(r)) }); return true; }
+        const alvo = path.resolve(pedido);
+        if (!this.c.raizesPermitidas.some(raiz => alvo === raiz || alvo.startsWith(raiz + path.sep))) { json(res, 400, { error: "Fora das pastas de mídia permitidas." }); return true; }
+        let pastas: string[];
+        try { pastas = fs.readdirSync(alvo, { withFileTypes: true }).filter(e => e.isDirectory() && !e.name.startsWith(".")).map(e => path.join(alvo, e.name)).sort((a, b) => a.localeCompare(b, "pt-BR")); }
+        catch { json(res, 404, { error: "Pasta não encontrada." }); return true; }
+        const pai = this.c.raizesPermitidas.includes(alvo) ? null : path.dirname(alvo);
+        json(res, 200, { caminho: alvo, pai, pastas });
         return true;
       }
       json(res, 404, { error: "Rota do Painel não encontrada." });
@@ -233,4 +317,15 @@ export class RotasPainel {
       return true;
     }
   }
+}
+
+/** "Limpar Arquivos Temporários": sobras de backups interrompidos (.novo-*) e arquivos .tmp com mais de 1 hora. */
+export function limparTemporarios(pasta: string): number {
+  let n = 0;
+  if (!fs.existsSync(pasta)) return 0;
+  for (const nome of fs.readdirSync(pasta)) {
+    const alvo = path.join(pasta, nome);
+    if ((nome.startsWith(".novo-") || nome.endsWith(".tmp")) && Date.now() - fs.statSync(alvo).mtimeMs > 3_600_000) { fs.rmSync(alvo, { recursive: true, force: true }); n++; }
+  }
+  return n;
 }

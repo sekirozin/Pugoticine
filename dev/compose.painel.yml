@@ -19,6 +19,8 @@ services:
     volumes:
       - pugoticine-painel-dados:/app/data
       - ${PUGOTICINE_MIDIA:?Defina a pasta de mídia de teste}/Filmes:/media/movies:ro
+      # Pasta inteira de teste, para criar outras bibliotecas pelo Painel (Animes, Séries...).
+      - ${PUGOTICINE_MIDIA}:/media/teste:ro
     depends_on:
       - login-dev
     restart: "no"

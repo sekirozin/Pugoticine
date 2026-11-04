@@ -13,29 +13,36 @@ Legenda: ✅ existe no PugotiCine · 🟡 parcial · ❌ não existe.
 | Item | Jellyfin | PugotiCine |
 |---|---|---|
 | Início | linhas "Continuar assistindo", "Próximo", "Adicionados recentemente" e bibliotecas | ✅ início com "Continuar assistindo" e a biblioteca |
-| Mídia: Filmes / Séries / Animes | uma entrada por biblioteca (`/Library/VirtualFolders`) | 🟡 só "Filmes" (séries e animes dependem do catálogo novo, passo 4 do braço 1) |
-| Administração: Painel | `web/apps/dashboard` (rotas em `web/apps/dashboard/routes/_asyncRoutes.ts:5-34`) | 🟡 Painel inicial feito nesta rodada (ver abaixo) |
+| Mídia: Filmes / Séries / Animes | uma entrada por biblioteca (`/Library/VirtualFolders`) | 🟡 o catálogo já é a soma das bibliotecas do Painel (cada item tem `bibliotecaId`/`bibliotecaNome`); uma entrada por biblioteca no menu principal fica para quem cuida do menu |
+| Administração: Painel | `web/apps/dashboard` (rotas em `web/apps/dashboard/routes/_asyncRoutes.ts:5-34`); `AppLayout.tsx`/`AppDrawer.tsx` (gaveta de 240 px) | ✅ como no Jellyfin: o menu do Painel substitui o menu lateral (240 px no computador, gaveta no celular); o topo da gaveta volta ao Início (PQA-234) |
 | Administração: Gerenciador de Metadados | `web/apps/dashboard/routes/routes.tsx:42` (`edititemmetadata`) + `web/components/metadataEditor/` | ❌ |
 | Usuário: Configurações | `web/apps/stable/routes/user/settings/index.tsx` + `web/controllers/user/{display,home,playback,subtitles,controls}` | ❌ (perfil é do PugotiLab) |
 | Sair | encerra a sessão | ✅ |
 
 ## Painel (Administração)
 
-| Tela do Jellyfin | O que faz | Web | Servidor | PugotiCine |
-|---|---|---|---|---|
-| Visão geral: Servidor | nome, versão, sistema; reiniciar e desligar | `web/apps/dashboard/components/widgets/ServerInfoWidget`, `features/system/api/useRestartServer.ts:11`, `useShutdownServer.ts:11` | `SystemController.cs:71` (`GetSystemInfo`) | ✅ servidor, versão, Node, FFmpeg, CPU, carga e memória. Reiniciar/desligar ❌ (no Zima isso fica com o Docker) |
-| Visão geral: Contagens | itens por tipo | `features/metrics/api/useItemCounts.ts:15` | `LibraryController.cs:450` (`GetItemCounts`) | ✅ filmes, tamanho, legendas, pessoas com atividade |
-| Visão geral: Dispositivos/Sessões ativas | quem está assistindo; pausar e mandar mensagem | `features/sessions/api/useSessions.ts:16`, `usePlayPauseSession.ts`, `useSendMessage.ts` | `SessionController.cs:55` (`GetSessions`) | 🟡 "Assistindo agora" pelo progresso gravado a cada 15 s (menos de 60 s e não concluído). Sem controle remoto. A lista exata de sessões HLS fica para integrar com o `GerenciadorHls` (braço 1) |
-| Visão geral: Atividade | registro de eventos | `features/activity/api/useLogEntries.ts:14` | `ActivityLogController.cs:43` | 🟡 atividade de reprodução (quem, o quê, quanto, quando). Login, erros e varreduras ❌ |
-| Visão geral: Tarefas em execução | tarefas agendadas rodando | `features/tasks/hooks/useLiveTasks`, `api/useStartTask.ts:14` | `ScheduledTasksController.cs:40` e `:98` | 🟡 lista das duas tarefas (varredura, metadados Radarr) com última e próxima. Executar = "Escanear biblioteca" |
-| Visão geral: Caminhos | caminhos do servidor e espaço em disco | `features/storage/api/useSystemStorage.ts:13` | `SystemController.cs:84` (`GetSystemStorage`) | ✅ mídia e dados com espaço livre/total |
-| Bibliotecas | criar, renomear e remover bibliotecas; caminhos; opções; escanear | `features/libraries/api/useVirtualFolders.ts:8`, `useRenameVirtualFolder.ts`, `useRemoveVirtualFolder.ts` | `LibraryStructureController.cs:60`, `LibraryController.cs:334` (`RefreshLibrary`) | 🟡 uma biblioteca fixa (`MEDIA_ROOT`) com "Escanear". Várias bibliotecas dependem do catálogo novo (braço 1, passo 4) |
-| Bibliotecas › Exibição / Metadados / NFO | idioma e país, provedores, leitura de NFO | `routes/libraries/{display,metadata,nfo}.tsx`, `useCultures.ts:8`, `useCountries.ts:8` | `LocalizationController` | ❌ |
-| Usuários | lista, criar, perfil, acesso às bibliotecas, controle parental, senha | `routes/users/*` | `UserController.cs` | ❌ (contas vêm do PugotiLab; dá para listar quem já usou e ter permissões por biblioteca) |
-| Reprodução › Transcodificação / Streaming / Retomada / Trickplay | aceleração por hardware, threads, limite de taxa, % para retomar | `routes/playback/*` | `ConfigurationController` (encoding) | ❌ (é do braço 1: player) |
-| Tarefas agendadas | lista, executar, gatilhos | `routes/tasks/*`, `features/tasks/api/*` | `ScheduledTasksController.cs` | 🟡 só a exibição no Painel |
-| Logs | arquivos de log do servidor | `features/logs/api/useServerLogs.ts:8`, `useServerLog.ts:12` | `SystemController.cs:150` | ❌ (o log do container sai no `docker logs`) |
-| Dispositivos, Chaves de API, Backups, Branding, Plugins, TV ao vivo, Rede | gestão avançada | `routes/{devices,keys,backups,branding,plugins,livetv}`, `_legacyRoutes.ts:6-20` | controllers de mesmo nome | ❌ (prioridade baixa) |
+Rodada 3 (03/11/2026). Toda tela mostra no topo o que tem efeito; o que só é salvo traz "ainda não implementado no PugotiCine".
+
+| Aba | Jellyfin (referência) | Funciona de verdade | Só salva / não existe |
+|---|---|---|---|
+| Painel (visão geral) | `SystemController`, `LibraryController.GetItemCounts`, `SessionController` | servidor, versão, contagens, discos, atividade, tarefas, bibliotecas reais | reiniciar/desligar (Docker) |
+| Geral | `ServerConfiguration` | nome do servidor (título e Painel) | idioma, caminhos, Quick Connect, rendimento |
+| Marca | `BrandingOptions` | CSS personalizado | imagem de abertura, aviso no login |
+| Usuários | `UserController`, `UserPolicy` | lista de quem entrou; ativo/desativado; acesso por biblioteca; classificação etária máxima; bloquear sem classificação (lista e rotas de mídia) | ocultar, bitrate, sessões, salas; nome/senha/login são do PugotiLab |
+| Bibliotecas | `LibraryStructureController`, `LibraryController.RefreshLibrary` | adicionar/editar/remover, tipo, várias pastas (seletor dentro de `PUGOTICINE_PASTAS_PERMITIDAS`), ativar, monitoramento em tempo real, rastrear cada uma ou todas; séries/animes com nome de episódio | idioma/país e atualização automática de metadados; Música e Livros (só vídeo) |
+| Bibliotecas › Exibição / Metadados / NFO | `routes/libraries/{display,metadata,nfo}` | — | tudo salvo (metadados vêm do Radarr) |
+| Reprodução › Transcodificação | `EncodingOptions` | aplicado pelo player (braço 1, `7e79edf`) | parte dos campos |
+| Reprodução › Retomar | `ServerConfiguration` | % máxima para concluir | mínimos, audiolivros |
+| Reprodução › Streaming / Trickplay | | — | salvos |
+| Dispositivos | `DevicesController` | lista real dos navegadores | — |
+| Atividade | `ActivityLogController` | eventos reais (reprodução, login, bibliotecas, tarefas, backups, configuração) | — |
+| TV ao Vivo / DVR | `LiveTvController` | — | M3U/XMLTV não feitos: exigem o player tocar transmissões contínuas |
+| Plugins | `PluginsController`, `PackageController` | instalados (nenhum) e integrações embutidas | catálogo indisponível (plugins são .NET); repositórios salvos |
+| Redes | `NetworkConfiguration`, `IPBasedAccessValidationMiddleware` | Redes LAN, Proxies conhecidos (X-Forwarded-For), Permitir remoto, filtro de IP lista branca/negra; não deixa salvar algo que bloqueie você | portas, HTTPS, URL base, IPv4/6, descoberta |
+| Chaves da API | `ApiKeyController` | criar/revogar; `X-PugotiCine-Token`/`X-Emby-Token` | — |
+| Backups | `BackupController`, `BackupService` | criar, baixar, excluir e restaurar (validado, com backup de segurança, aplicado ao reiniciar) | mídias e variáveis do container não entram |
+| Registros | `SystemController.GetServerLogs` | arquivos reais; aviso de resposta lenta | — |
+| Tarefas Agendadas | `ScheduledTasksController`, `TaskTriggerInfo` | 6 tarefas (escanear, metadados Radarr, limpar atividade, limpar logs, limpar temporários, otimizar banco), iniciar, gatilhos diário/semanal/intervalo/inicialização | tarefas de capítulos, trickplay, legendas, plugins |
 
 ## Gerenciador de Metadados (Administração)
 
