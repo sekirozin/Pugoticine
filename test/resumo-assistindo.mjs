@@ -1,4 +1,4 @@
-// PQA-274: rota interna "Assistindo no Pugoticine" para o resumo do Pugoti Profile.
+// PQA-279: rota interna "Assistindo no Pugoticine" para o resumo do Pugoti Profile.
 // Contra o Pugoticine em Docker (compose de desenvolvimento, PUGOTILAB_RESUMO_TOKEN=resumo-dev): marcos começa um
 // filme (progresso no meio) e termina outro; a rota com o token devolve só o começado, com título, "faltam N min",
 // pôster absoluto e porcentagem; sem token ou com token errado, 401.
@@ -26,4 +26,4 @@ assert.equal(item.detail, "faltam 80 min");
 assert.equal(item.percent, 20);
 assert.match(item.imageUrl, /^https:\/\/room\.pugotilab\.com\/api\/media\/[a-f0-9]{24}\/imagem\/poster\?v=.+&l=342$/);
 assert.ok(!watching.some((w) => w.title === fim.title), "terminado não aparece");
-console.log("PQA-274 (Pugoticine) ok");
+console.log("PQA-279 (Pugoticine) ok");

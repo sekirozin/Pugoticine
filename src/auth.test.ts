@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { criarLeitorDePerfil } from "./auth.js";
 
-test("PQA-268/272: perfil do Pugotilab em cache curto por sessão (uma consulta ao auth, não uma por requisição)", async () => {
+test("PQA-268/277: perfil do Pugotilab em cache curto por sessão (uma consulta ao auth, não uma por requisição)", async () => {
   let consultas = 0;
   let relogio = 1_000;
   let valido = true;
@@ -33,7 +33,7 @@ test("PQA-268/272: perfil do Pugotilab em cache curto por sessão (uma consulta 
   assert.equal(consultas, antes + 1, "limite de entradas: a mais antiga saiu do cache");
 });
 
-test("PQA-272: padrão de 3 s — sessão encerrada no auth deixa de valer quase na hora", async () => {
+test("PQA-277: padrão de 3 s — sessão encerrada no auth deixa de valer quase na hora", async () => {
   let relogio = 0;
   let ativa = true;
   const lerPerfil = criarLeitorDePerfil({
