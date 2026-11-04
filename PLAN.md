@@ -53,3 +53,11 @@ O usuário rejeitou os quatro temas e os modos claro/escuro. A decisão vigente 
 ## Último handoff atualizado
 
 Codex, 2026-11-04: paleta Lima única e padrão pronta e testada em desktop/celular; próximo deploy seguro no ZimaOS.
+
+## Temas PugotiLab — 04/11/2026
+
+Novo pedido do usuário: manter Lima (#C8FF00) e adicionar Laranja do PugotiRead (#D97706), ambos sobre fundo escuro #101010 e texto branco. A escolha pertence à conta PugotiLab; o componente de conta a grava na preferência palette e a aplica ao Pugoticine. A escolha claro/escuro continua independente. Código do menu e CSS preparados; próximo: validar e publicar.
+
+## Último handoff atualizado
+
+Codex, 2026-11-04: paletas Lima/Laranja integradas ao componente de conta e CSS do Pugoticine; próximo teste e deploy.

@@ -34,10 +34,15 @@
   const icone = (nome) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONES[nome]}</svg>`;
   const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const CHAVE = "pugoti-tema";
+  const CHAVE_PALETA = "pugoti-paleta";
   let sessaoCompartilhada = null;
   const curto = (nome) => { const t = nome.replace(/^Pugoti/, ""); return t ? t.charAt(0).toUpperCase() + t.slice(1) : nome; };
 
   const CSS = `
+html[data-pugoti-paleta="lima"]{--pa-accent:#c8ff00;--primary:#c8ff00;--brand:#c8ff00;--brand2:#dcff5c;--blue:#c8ff00;--accent:#c8ff00}
+html[data-pugoti-paleta="laranja"]{--pa-accent:#d97706;--primary:#d97706;--brand:#d97706;--brand2:#f59e0b;--blue:#d97706;--accent:#d97706}
+html[data-pugoti-tema="escuro"][data-pugoti-paleta]{--bg:#101010;--text:#fff;--panel:#171717;--panel2:#242424;--line:#393939;--soft:#242424}
+html[data-pugoti-tema="escuro"][data-pugoti-paleta] body{background:#101010;color:#fff}
 pugoti-conta{display:inline-block;position:relative;flex:none;font-family:inherit;line-height:normal;
   --pc-accent:var(--pa-accent,var(--primary,var(--accent,#4fb3ff)));--pc-border:var(--pa-border,rgba(127,127,127,.32));
   --pc-bg:var(--pa-bg,#11161d);--pc-hover:var(--pa-hover,rgba(127,127,127,.16));--pc-text:var(--pa-text,#eef2f6);--pc-muted:var(--pa-muted,#9aa6b2);--pc-danger:#ff8a80}
@@ -63,6 +68,10 @@ pugoti-conta .pc-apps{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;p
 pugoti-conta .pc-app{display:grid;justify-items:center;gap:4px;padding:8px 2px;border-radius:10px;color:var(--pc-text);text-decoration:none;font-size:11px}
 pugoti-conta .pc-app[aria-current="true"]{background:var(--pc-hover)}
 pugoti-conta .pc-icone{display:block;width:30px;height:30px;border-radius:8px;border:1px solid var(--pc-border);background:#fff;object-fit:cover}
+pugoti-conta .pc-amostra{width:13px;height:13px;border-radius:50%;border:1px solid currentColor}
+pugoti-conta .pc-paletas{grid-template-columns:repeat(2,1fr)}
+pugoti-conta .pc-amostra-lima{background:#c8ff00}
+pugoti-conta .pc-amostra-laranja{background:#d97706}
 pugoti-conta .pc-tema{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:0 14px 10px;padding:3px;border:1px solid var(--pc-border);border-radius:10px}
 pugoti-conta .pc-tema button{display:flex;align-items:center;justify-content:center;gap:5px;min-height:32px;border:0;border-radius:7px;background:transparent;color:var(--pc-text);font:inherit;font-size:12px;cursor:pointer}
 pugoti-conta .pc-tema button svg{width:15px;height:15px}
@@ -82,6 +91,15 @@ pugoti-conta .pc-tema button[aria-pressed="true"]{background:var(--pc-accent);co
     try { window.pugotiAplicarTema?.(tema, preferencia); } catch (erro) { console.error(erro); }
     document.dispatchEvent(new CustomEvent("pugoti:tema", { detail: { tema, preferencia } }));
   }
+  function aplicarPaleta(valor) {
+    const paleta = valor === "laranja" ? "laranja" : "lima";
+    document.documentElement.dataset.pugotiPaleta = paleta;
+    try { localStorage.setItem(CHAVE_PALETA, paleta); } catch {}
+    document.dispatchEvent(new CustomEvent("pugoti:paleta", { detail: { paleta } }));
+  }
+  let paletaInicial = "lima";
+  try { paletaInicial = localStorage.getItem(CHAVE_PALETA) || "lima"; } catch {}
+  aplicarPaleta(paletaInicial);
   // Antes da conta chegar: último tema usado neste navegador (evita piscar).
   let preferenciaInicial = "sistema";
   try { preferenciaInicial = localStorage.getItem(CHAVE) || "sistema"; } catch {}
@@ -107,6 +125,7 @@ pugoti-conta .pc-tema button[aria-pressed="true"]{background:var(--pc-accent);co
       this.servico = this.getAttribute("servico") || "";
       this.perfil = null;
       this.preferencia = preferenciaInicial;
+      this.paleta = paletaInicial;
       this.aberto = false;
       this.render();
       this.carregar();
@@ -132,9 +151,11 @@ pugoti-conta .pc-tema button[aria-pressed="true"]{background:var(--pc-accent);co
         if (!perfil || !this.isConnected) return;
         this.perfil = perfil;
         this.preferencia = window.pugotiConta?.preferencia ?? perfil.preferences?.theme ?? "sistema";
-        window.pugotiConta = { perfil, preferencia: this.preferencia };
+        this.paleta = window.pugotiConta?.paleta ?? perfil.preferences?.palette ?? "lima";
+        window.pugotiConta = { perfil, preferencia: this.preferencia, paleta: this.paleta };
         if (primeira) {
           aplicarTema(this.preferencia);
+          aplicarPaleta(this.paleta);
           document.dispatchEvent(new CustomEvent("pugoti:conta", { detail: perfil }));
         }
         this.render();
@@ -148,6 +169,16 @@ pugoti-conta .pc-tema button[aria-pressed="true"]{background:var(--pc-accent);co
       try {
         await fetch(`${this.auth}/auth/api/preferences`, { method: "PATCH", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { theme: preferencia } }) });
       } catch { /* fica valendo neste navegador */ }
+    }
+    async salvarPaleta(paleta) {
+      this.paleta = paleta === "laranja" ? "laranja" : "lima";
+      window.pugotiConta = { ...(window.pugotiConta || {}), paleta: this.paleta };
+      aplicarPaleta(this.paleta);
+      this.render();
+      try {
+        const resposta = await fetch(`${this.auth}/auth/api/preferences`, { method: "PATCH", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: { palette: this.paleta } }) });
+        if (!resposta.ok) throw new Error("Preferência não salva");
+      } catch { /* permanece aplicada neste navegador; a conta pode estar offline */ }
     }
     alternar(abrir = !this.aberto) {
       this.aberto = abrir;
@@ -171,12 +202,18 @@ pugoti-conta .pc-tema button[aria-pressed="true"]{background:var(--pc-accent);co
           <a class="pc-item" role="menuitem" href="${this.auth}/auth/profile?return=${volta}">${icone("user")}<span>Perfil</span></a>
           <div class="pc-secao">Serviços</div>
           <nav class="pc-apps" aria-label="Serviços Pugotilab">${SERVICOS.map((s) => `<a class="pc-app" href="${s.url}" ${s.nome === this.servico ? 'aria-current="true"' : ""}><img class="pc-icone" src="${this.auth}/auth/assets/servicos/${s.chave}.png" alt="" loading="lazy"><span>${esc(curto(s.nome))}</span></a>`).join("")}</nav>
-          <div class="pc-secao">Tema</div>
+          <div class="pc-secao">Tema PugotiLab</div>
+          <div class="pc-tema pc-paletas" role="group" aria-label="Tema PugotiLab">
+            <button type="button" data-paleta="lima" aria-pressed="${this.paleta === "lima"}"><span class="pc-amostra pc-amostra-lima"></span>Lima</button>
+            <button type="button" data-paleta="laranja" aria-pressed="${this.paleta === "laranja"}"><span class="pc-amostra pc-amostra-laranja"></span>Laranja</button>
+          </div>
+          <div class="pc-secao">Aparência</div>
           <div class="pc-tema" role="group" aria-label="Tema">${temas.map(([v, i, t]) => `<button type="button" data-tema="${v}" aria-pressed="${this.preferencia === v}">${icone(i)}<span>${t}</span></button>`).join("")}</div>
           ${this.hasAttribute("so-escuro") ? `<p class="pc-nota">O ${esc(this.servico || "serviço")} usa só o tema escuro; a escolha vale para os outros serviços.</p>` : ""}
           <a class="pc-item pc-sair" role="menuitem" href="${this.auth}/auth/logout?return=${volta}">${icone("logout")}<span>Sair</span></a>
         </div>`;
       this.querySelector(".pc-gatilho").addEventListener("click", (e) => { e.stopPropagation(); this.alternar(); });
+      this.querySelectorAll("[data-paleta]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); this.salvarPaleta(b.dataset.paleta); }));
       this.querySelectorAll("[data-tema]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); this.salvarTema(b.dataset.tema); }));
     }
   }
