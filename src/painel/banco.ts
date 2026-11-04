@@ -23,7 +23,7 @@ const sha256 = (t: string) => crypto.createHash("sha256").update(t).digest("hex"
 export function descreverNavegador(ua: string): { nome: string; aplicativo: string } {
   const navegador = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? (/Chromium/.test(ua) ? "Chromium" : "Chrome") : /Safari\//.test(ua) ? "Safari" : "Navegador";
   const sistema = /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iOS" : /Windows/.test(ua) ? "Windows" : /Mac OS X/.test(ua) ? "macOS" : /Linux/.test(ua) ? "Linux" : "Sistema desconhecido";
-  return { nome: `${navegador} no ${sistema}`, aplicativo: "PugotiCine Web" };
+  return { nome: `${navegador} no ${sistema}`, aplicativo: "Pugoticine Web" };
 }
 
 export class BancoPainel {
@@ -57,6 +57,14 @@ export class BancoPainel {
   foiSalva(id: string): boolean {
     return Boolean(this.db.prepare("SELECT 1 FROM configuracao WHERE pagina = ?").get(id));
   }
+  /** Nome antigo do servidor ("PugotiCine", com C maiúsculo) salvo no Painel › Geral passa a ser "Pugoticine". */
+  migrarNomeAntigo(): boolean {
+    const geral = this.ler("geral");
+    if (geral.ServerName !== "Pugoti" + "Cine") return false;
+    this.salvar("geral", { ...geral, ServerName: "Pugoticine" });
+    return true;
+  }
+
   salvar(id: string, entrada: Record<string, unknown>): Record<string, unknown> {
     const p = pagina(id);
     if (!p) throw new Error("Página inexistente.");

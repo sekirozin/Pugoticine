@@ -1,4 +1,4 @@
-// PQA-227: metadados do TMDB em português no navegador (PugotiCine em Docker com TMDB_READ_TOKEN): capas reais em vez
+// PQA-227: metadados do TMDB em português no navegador (Pugoticine em Docker com TMDB_READ_TOKEN): capas reais em vez
 // de quadro do vídeo, título traduzido, sinopse, série com sinopse/ano e episódios com nome, sinopse e cena.
 // PQA-228: a foto do avatar cobre o círculo inteiro (não fica cortada pela metade).
 import assert from "node:assert/strict";

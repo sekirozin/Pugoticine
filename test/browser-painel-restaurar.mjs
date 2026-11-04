@@ -11,7 +11,7 @@ const api = async (metodo, rota, corpo) => (await fetch(BASE + rota, { method: m
 const reiniciar = async () => {
   execFileSync("docker", ["compose", "-p", "pugoticine-painel", "-f", "dev/compose.painel.yml", "restart"], { stdio: "ignore", env: { ...process.env, PUGOTICINE_MIDIA: process.env.PUGOTICINE_MIDIA ?? "/home/sekironote/IA/Fontes/Pugoticine-midia-teste" } });
   for (let i = 0; i < 60; i++) { try { if ((await fetch(`${BASE}/health`)).ok) return; } catch {} await new Promise(r => setTimeout(r, 1000)); }
-  throw new Error("o PugotiCine não voltou");
+  throw new Error("o Pugoticine não voltou");
 };
 const navegador = await pw.chromium.launch({ executablePath: "/usr/bin/chromium" });
 const erros = [];
@@ -46,7 +46,7 @@ try {
   const seguranca = (await api("GET", "/api/painel/backups")).restauracaoPendente.seguranca;
   assert.notEqual(seguranca, backup.nome);
   assert.match(aviso, new RegExp(seguranca));
-  assert.equal((await api("GET", "/api/marca")).nomeServidor, "Cine Depois", "nada muda antes de reiniciar");
+  assert.equal((await api("GET", "/api/servidor")).nomeServidor, "Cine Depois", "nada muda antes de reiniciar");
 
   // Cancelar e agendar de novo pela API (o caminho da tela já foi testado), depois reiniciar.
   await page.locator("[data-cancelar-restauracao]").click();
@@ -54,7 +54,7 @@ try {
   assert.equal((await api("GET", "/api/painel/backups")).restauracaoPendente, null);
   await api("POST", `/api/painel/backups/${backup.nome}/restaurar`, { confirmar: backup.nome });
   await reiniciar();
-  assert.equal((await api("GET", "/api/marca")).nomeServidor, "Cine Antes", "configuração voltou");
+  assert.equal((await api("GET", "/api/servidor")).nomeServidor, "Cine Antes", "configuração voltou");
   assert.equal((await api("GET", "/api/painel/backups")).restauracaoPendente, null);
   const atividade = (await api("GET", "/api/painel/atividade")).eventos.map(e => e.nome).join(" | ");
   assert.match(atividade, new RegExp(`Backup restaurado: ${backup.nome}`));

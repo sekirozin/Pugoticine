@@ -40,7 +40,7 @@ const salvar = async (page) => {
 };
 
 try {
-  await req("PUT", "/api/painel/config/geral", ADMIN, { ServerName: "PugotiCine" });
+  await req("PUT", "/api/painel/config/geral", ADMIN, { ServerName: "Pugoticine" });
   const { corpo: { paginas } } = await req("GET", "/api/painel/paginas");
 
   // 1) Usuário comum: sem item Painel e sem acesso a nenhuma rota do Painel.
@@ -110,12 +110,10 @@ try {
   await req("PUT", "/api/painel/config/reproducao-retomar", ADMIN, { MaxResumePct: 90 });
   assert.equal((await req("POST", "/api/progress", MARCOS, { mediaId: filme.id, position: 50, duration: 60 })).corpo.progress.completed, false);
 
-  // 7) Marca: CSS personalizado aplicado na hora.
-  await ir(admin, "marca");
-  await admin.locator('[name="CustomCss"]').fill(".painel-cabecalho h2{color:rgb(1, 200, 3)}");
-  assert.equal(await salvar(admin), "Configurações salvas.");
-  await admin.waitForFunction(() => getComputedStyle(document.querySelector(".painel-cabecalho h2")).color === "rgb(1, 200, 3)");
-  await req("PUT", "/api/painel/config/marca", ADMIN, { CustomCss: "" });
+  // 7) PQA-260: a aba Marca não existe mais (serviço próprio): nem no menu, nem na API, nem CSS personalizado aplicado.
+  assert.equal(await admin.locator('[data-painel-ir="marca"]').count(), 0, "sem item Marca no menu");
+  assert.equal((await req("GET", "/api/painel/config/marca", ADMIN)).status, 404);
+  assert.equal(await admin.locator("#css-personalizado").count(), 0);
 
   // 8) Usuários: marcos aparece; desativar bloqueia de verdade; reativar devolve o acesso.
   await ir(admin, "usuarios");
@@ -139,7 +137,7 @@ try {
   await ir(admin, "atividade");
   const atividade = await admin.locator("[data-painel-eventos]").innerText();
   assert.match(atividade, /Configuração alterada: Geral/);
-  assert.match(atividade, /marcos está online no PugotiCine Web/);
+  assert.match(atividade, /marcos está online no Pugoticine Web/);
   await admin.locator('[data-filtro="sistema"]').click();
   await admin.waitForFunction(() => document.querySelector('[data-filtro="sistema"]').classList.contains("ativo"));
   assert.doesNotMatch(await admin.locator("[data-painel-eventos]").innerText(), /marcos está online/);
@@ -149,10 +147,10 @@ try {
   await admin.locator('[data-nova-chave] [name="nome"]').fill("Kodi da sala");
   await admin.locator('[data-nova-chave] button[type="submit"]').click();
   const token = (await admin.locator("[data-token]").innerText()).trim();
-  assert.equal((await req("GET", "/api/painel", { "X-PugotiCine-Token": token })).status, 200, "chave dá acesso");
+  assert.equal((await req("GET", "/api/painel", { "X-Pugoticine-Token": token })).status, 200, "chave dá acesso");
   await admin.locator('tr:has-text("Kodi da sala") [data-revogar]').click();
   await admin.waitForFunction(() => !document.body.innerText.includes("Kodi da sala"));
-  assert.equal((await req("GET", "/api/painel", { "X-PugotiCine-Token": token })).status, 401, "revogada não vale");
+  assert.equal((await req("GET", "/api/painel", { "X-Pugoticine-Token": token })).status, 401, "revogada não vale");
 
   // 11) Backups: criar, baixar (tar); restaurar sem digitar o nome é recusado (o fluxo completo é o PQA-240).
   await ir(admin, "backups");
@@ -180,7 +178,7 @@ try {
   await admin.waitForFunction(() => /Bibliotecas rastreadas/.test(document.querySelector("#toast")?.textContent ?? ""));
   assert.match(await admin.locator("[data-painel-conteudo]").innerText(), /Filmes[\s\S]*\/media\/movies/);
 
-  await req("PUT", "/api/painel/config/geral", ADMIN, { ServerName: "PugotiCine" });
+  await req("PUT", "/api/painel/config/geral", ADMIN, { ServerName: "Pugoticine" });
   // 14) Plugins e TV ao Vivo: honestos (sem filtros mortos, motivo explicado, botões desativados).
   await ir(admin, "plugins");
   assert.match(await admin.locator("[data-catalogo-indisponivel]").innerText(), /Catálogo indisponível: .*\.NET/);

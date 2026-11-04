@@ -1,5 +1,5 @@
 // Organizador de downloads feitos à mão no Transmission (magnet colado direto, fora do Radarr/Sonarr).
-// Quando o torrent termina, o script do Transmission avisa o PugotiCine, que:
+// Quando o torrent termina, o script do Transmission avisa o Pugoticine, que:
 //  1. identifica o conteúdo pelas regras de nome do Jellyfin (episódio "S01E05"/" - 05" = série; senão, filme);
 //  2. acha o título no TMDB (pt-BR): animação japonesa = Animes, outras séries = Séries;
 //  3. garante o título no Radarr/Sonarr (cadastra sem monitorar nem buscar, na pasta raiz certa);

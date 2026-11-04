@@ -1,4 +1,4 @@
-// PQA-220: player no navegador real (Chromium do sistema, com H.264), contra o PugotiCine em Docker
+// PQA-220: player no navegador real (Chromium do sistema, com H.264), contra o Pugoticine em Docker
 // (compose.desenvolvimento.yml) e o filme de teste de 10 min em 1080p com AC-3 5.1:
 //  - começa a tocar rápido; pular para o minuto 5 não converte o meio (o player só pede os trechos do ponto novo);
 //  - fechar e abrir de novo retoma no ponto salvo, começando a pedir trechos dali (não do início).

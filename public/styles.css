@@ -202,3 +202,9 @@ body.modo-painel .painel-app{display:block}body.modo-painel .painel-menu{positio
 .profile-button img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;border-radius:50%}
 .profile-button img[src]:not([src=""])+#avatar-fallback,.profile-button:has(img[src]:not([src=""])) #avatar-fallback{visibility:hidden}
 .episodio-sinopse{margin-top:6px!important;color:var(--muted);font-size:13.5px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+
+/* Ícones do Tabler (public/icones.js): traço ou preenchido, independentemente das classes de tamanho
+   (.icone-cheio, .osd-icone, .salas-icone, que antes também pintavam o desenho). */
+svg.icone-tabler{fill:none!important;stroke:currentColor!important;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+svg.icone-tabler-cheio{fill:currentColor!important;stroke:none!important}
+.titulo-play svg.icone-tabler-cheio,.botao-assistir svg.icone-tabler-cheio{transform:translateX(1px)}

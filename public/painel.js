@@ -1,3 +1,4 @@
+import { icone as iconeTabler } from "/icones.js";
 // Painel do administrador: equivale à página inicial do Painel do Jellyfin (widgets de servidor, contagens,
 // dispositivos/sessões, atividade, tarefas e caminhos). Só aparece para administradores; os dados vêm de /api/painel.
 const bytes = (valor) => {
@@ -72,15 +73,13 @@ export function renderPainel(painel, escapeHtml) {
 // Avançado) com uma tela por item. As telas de configuração são montadas a partir do esquema do servidor
 // (/api/painel/config/:id); as de lista têm tela própria. Cada tela mostra o que tem efeito de verdade.
 const GRUPOS = ["Servidor", "Dispositivos", "TV ao Vivo", "Plugins", "Avançado"];
+// Ícones do Tabler (public/icones.js) por tela do Painel.
 const ICONES = {
-  painel: "M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z", geral: "M12 15a3 3 0 1 0 0-6a3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3a1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9a1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z",
-  marca: "M12 3l2.6 5.3l5.9.9l-4.3 4.1l1 5.8L12 16.4L6.8 19.1l1-5.8L3.5 9.2l5.9-.9z", usuarios: "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8a4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8",
-  Bibliotecas: "M4 4h4v16H4zM10 4h4v16h-4zM16 5l4 1l-3 15l-4-1z", "Reprodução": "M5 3l14 9l-14 9z",
-  dispositivos: "M4 5h16v10H4zM2 19h20M9 15v4M15 15v4", atividade: "M3 12h4l3-8l4 16l3-8h4", "tv-ao-vivo": "M3 7h18v13H3zM8 2l4 5l4-5", dvr: "M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8a4 4 0 0 0 0 8z",
-  plugins: "M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4", redes: "M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18zM3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18",
-  chaves: "M15 7a4 4 0 1 1-4 4l-8 8h3v-2h2v-2h2l2-2", backups: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5l5-5M12 15V3", registros: "M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h8", tarefas: "M12 21a9 9 0 1 0 0-18a9 9 0 0 0 0 18zM12 7v5l3 3"
+  painel: "layout-dashboard", geral: "settings", usuarios: "users", Bibliotecas: "books", "Reprodução": "player-play",
+  dispositivos: "devices", atividade: "activity", "tv-ao-vivo": "device-tv", dvr: "player-record", plugins: "plug", redes: "world",
+  chaves: "key", backups: "database-export", registros: "file-text", tarefas: "list-check"
 };
-const icone = (nome) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONES[nome] ?? ICONES.geral}"/></svg>`;
+const icone = (nome) => iconeTabler(ICONES[nome] ?? "settings");
 const AVISOS = { real: "painel-aviso-real", parcial: "painel-aviso-parcial", salvo: "painel-aviso-salvo" };
 
 const estado = { paginas: [], atual: "painel", timer: null, container: null, f: null, abertos: new Set() };
@@ -118,8 +117,8 @@ export async function abrirPainel(container, ferramentas) {
   const atual = estado.paginas.find((p) => p.id === estado.atual);
   if (atual?.pai) estado.abertos.add(atual.pai);
   const gaveta = drawer();
-  const servidor = estado.servidor ?? (estado.servidor = await ferramentas.api("/api/marca").catch(() => ({})));
-  gaveta.innerHTML = `<a class="painel-drawer-topo" href="/" data-painel-inicio title="Voltar para o início"><img src="/pugoticine-icon.svg" alt=""><span><strong>${ferramentas.escapeHtml(servidor.nomeServidor || "Pugoticine")}</strong><small>${ferramentas.escapeHtml(servidor.versao || "")}</small></span></a><nav class="painel-menu" aria-label="Painel">${menu()}</nav>`;
+  const servidor = estado.servidor ?? (estado.servidor = await ferramentas.api("/api/servidor").catch(() => ({})));
+  gaveta.innerHTML = `<a class="painel-drawer-topo" href="/" data-painel-inicio title="Voltar para o início"><img src="/pugoticine-icon.svg?v=puci" alt=""><span><strong>${ferramentas.escapeHtml(servidor.nomeServidor || "Pugoticine")}</strong><small>${ferramentas.escapeHtml(servidor.versao || "")}</small></span></a><nav class="painel-menu" aria-label="Painel">${menu()}</nav>`;
   container.innerHTML = `<div class="painel-app"><div class="painel-conteudo" data-painel-conteudo></div></div>`;
   gaveta.querySelector("[data-painel-inicio]").addEventListener("click", (ev) => { ev.preventDefault(); ferramentas.voltarAoInicio?.(); });
   gaveta.querySelectorAll("[data-painel-ir]").forEach((b) => b.addEventListener("click", () => { ferramentas.fecharMenu?.(); irPara(b.dataset.painelIr); }));
@@ -222,7 +221,7 @@ function ligarFormulario(alvo, pagina) {
       }
       status.textContent = "Configurações salvas.";
       estado.f.toast("Configurações salvas.");
-      if (pagina.id === "geral" || pagina.id === "marca") { estado.servidor = null; estado.f.aoMudarMarca?.(); }
+      if (pagina.id === "geral") { estado.servidor = null; estado.f.aoMudarServidor?.(); }
     } catch (erro) { status.textContent = erro.message; }
   });
 }

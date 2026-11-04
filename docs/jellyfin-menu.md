@@ -1,16 +1,16 @@
-# Menu do Jellyfin 10.11.10 → PugotiCine
+# Menu do Jellyfin 10.11.10 → Pugoticine
 
-Este documento é o inventário das telas do menu do Jellyfin e do que o PugotiCine já tem de cada uma (o "braço 2").
+Este documento é o inventário das telas do menu do Jellyfin e do que o Pugoticine já tem de cada uma (o "braço 2").
 
 - **Referência:** fontes em `motor/web` (jellyfin-web) e `motor/servidor` (servidor), versão 10.11.10.
 - **Caminhos abaixo:** os de `web/` são relativos a `motor/web/src`; os de `Controllers/` a `motor/servidor/Jellyfin.Api/Controllers`.
 - **REA:** não foi preciso usar nesta rodada. O código-fonte cobriu as três áreas, e as evidências do REA em `~/IA/Analises/jellyfin-20261103` confirmam a mesma arquitetura (controllers da API acima, `SessionManager`, `ScheduledTasks`).
 
-Legenda: ✅ existe no PugotiCine · 🟡 parcial · ❌ não existe.
+Legenda: ✅ existe no Pugoticine · 🟡 parcial · ❌ não existe.
 
 ## Menu lateral
 
-| Item | Jellyfin | PugotiCine |
+| Item | Jellyfin | Pugoticine |
 |---|---|---|
 | Início | linhas "Continuar assistindo", "Próximo", "Adicionados recentemente" e bibliotecas | ✅ início com "Continuar assistindo" e a biblioteca |
 | Mídia: Filmes / Séries / Animes | uma entrada por biblioteca (`/Library/VirtualFolders`) | 🟡 o catálogo já é a soma das bibliotecas do Painel (cada item tem `bibliotecaId`/`bibliotecaNome`); uma entrada por biblioteca no menu principal fica para quem cuida do menu |
@@ -21,13 +21,13 @@ Legenda: ✅ existe no PugotiCine · 🟡 parcial · ❌ não existe.
 
 ## Painel (Administração)
 
-Rodada 3 (03/11/2026). Toda tela mostra no topo o que tem efeito; o que só é salvo traz "ainda não implementado no PugotiCine".
+Rodada 3 (03/11/2026). Toda tela mostra no topo o que tem efeito; o que só é salvo traz "ainda não implementado no Pugoticine".
 
 | Aba | Jellyfin (referência) | Funciona de verdade | Só salva / não existe |
 |---|---|---|---|
 | Painel (visão geral) | `SystemController`, `LibraryController.GetItemCounts`, `SessionController` | servidor, versão, contagens, discos, atividade, tarefas, bibliotecas reais | reiniciar/desligar (Docker) |
 | Geral | `ServerConfiguration` | nome do servidor (título e Painel) | idioma, caminhos, Quick Connect, rendimento |
-| Marca | `BrandingOptions` | CSS personalizado | imagem de abertura, aviso no login |
+| ~~Marca~~ | `BrandingOptions` | removida (04/11/2026) | — |
 | Usuários | `UserController`, `UserPolicy` | lista de quem entrou; ativo/desativado; acesso por biblioteca; classificação etária máxima; bloquear sem classificação (lista e rotas de mídia) | ocultar, bitrate, sessões, salas; nome/senha/login são do PugotiLab |
 | Bibliotecas | `LibraryStructureController`, `LibraryController.RefreshLibrary` | adicionar/editar/remover, tipo, várias pastas (seletor dentro de `PUGOTICINE_PASTAS_PERMITIDAS`), ativar, monitoramento em tempo real, rastrear cada uma ou todas; séries/animes com nome de episódio | idioma/país e atualização automática de metadados; Música e Livros (só vídeo) |
 | Bibliotecas › Exibição / Metadados / NFO | `routes/libraries/{display,metadata,nfo}` | — | tudo salvo (metadados vêm do Radarr) |
@@ -39,14 +39,14 @@ Rodada 3 (03/11/2026). Toda tela mostra no topo o que tem efeito; o que só é s
 | TV ao Vivo / DVR | `LiveTvController` | — | M3U/XMLTV não feitos: exigem o player tocar transmissões contínuas |
 | Plugins | `PluginsController`, `PackageController` | instalados (nenhum) e integrações embutidas | catálogo indisponível (plugins são .NET); repositórios salvos |
 | Redes | `NetworkConfiguration`, `IPBasedAccessValidationMiddleware` | Redes LAN, Proxies conhecidos (X-Forwarded-For), Permitir remoto, filtro de IP lista branca/negra; não deixa salvar algo que bloqueie você | portas, HTTPS, URL base, IPv4/6, descoberta |
-| Chaves da API | `ApiKeyController` | criar/revogar; `X-PugotiCine-Token`/`X-Emby-Token` | — |
+| Chaves da API | `ApiKeyController` | criar/revogar; `X-Pugoticine-Token`/`X-Emby-Token` | — |
 | Backups | `BackupController`, `BackupService` | criar, baixar, excluir e restaurar (validado, com backup de segurança, aplicado ao reiniciar) | mídias e variáveis do container não entram |
 | Registros | `SystemController.GetServerLogs` | arquivos reais; aviso de resposta lenta | — |
 | Tarefas Agendadas | `ScheduledTasksController`, `TaskTriggerInfo` | 6 tarefas (escanear, metadados Radarr, limpar atividade, limpar logs, limpar temporários, otimizar banco), iniciar, gatilhos diário/semanal/intervalo/inicialização | tarefas de capítulos, trickplay, legendas, plugins |
 
 ## Gerenciador de Metadados (Administração)
 
-| O que faz | Web | Servidor | PugotiCine |
+| O que faz | Web | Servidor | Pugoticine |
 |---|---|---|---|
 | Árvore das bibliotecas com os itens | `web/components/metadataEditor/metadataEditor.js:404-407` (`getItem`, `getRootFolder`) | `ItemsController` | ❌ |
 | Editar campos: título, título original e de ordenação, data de adição, ano, data de estreia, nota da comunidade e da crítica, tagline, sinopse, classificação, gêneros, estúdios, tags, pessoas, idioma e país, travar dados | `metadataEditor.template.html` (ids `txtName`, `txtOriginalName`, `txtSortName`, `txtProductionYear`, `txtPremiereDate`, `txtOverview`, `listGenres`, `listStudios`, `listTags`, `peopleList`, `chkLockData`…), salvar em `metadataEditor.js:52` | `ItemUpdateController.cs:75` (`UpdateItem`), `:148` (`GetMetadataEditorInfo`) | ❌ (hoje só lê do Radarr; não há edição persistente) |
@@ -57,7 +57,7 @@ Rodada 3 (03/11/2026). Toda tela mostra no topo o que tem efeito; o que só é s
 
 ## Configurações do usuário
 
-| Tela | O que guarda | Web | Servidor | PugotiCine |
+| Tela | O que guarda | Web | Servidor | Pugoticine |
 |---|---|---|---|---|
 | Perfil | nome, senha, imagem | `web/apps/stable/routes/user/userprofile.tsx` | `UserController.cs` | ✅ no PugotiLab (link "Perfil") |
 | Exibição | idioma, formato de data, tema, telas | `web/controllers/user/display` | `DisplayPreferencesController.cs:114` | ❌ |
@@ -105,7 +105,7 @@ Só administrador acessa. Usuário comum recebe 403 em todas as rotas `/api/pain
 |---|---|---|
 | Painel | visão geral real (servidor, contagens, assistindo agora, atividade, biblioteca, tarefas, discos) | — |
 | Geral | Nome do servidor (título da página e Painel) | idioma, locais de cache e metadados, Quick Connect, limites de rendimento |
-| Marca | CSS personalizado aplicado no app | imagem de abertura, aviso no login (o login é do PugotiLab) |
+| ~~Marca~~ | removida em 04/11/2026 (serviço próprio) | — |
 | Usuários | lista de quem já entrou (PugotiLab); **Desativar este usuário** bloqueia o acesso (403); excluir da lista | ocultar, limite de bitrate, sessões simultâneas, acesso às salas (SyncPlay) |
 | Bibliotecas › Bibliotecas | lista e **Rastrear Todas as Bibliotecas** | adicionar, renomear e remover (precisa do catálogo com várias bibliotecas) |
 | Bibliotecas › Exibir / Metadados / NFO | — | todos os campos |
@@ -117,11 +117,11 @@ Só administrador acessa. Usuário comum recebe 403 em todas as rotas `/api/pain
 | TV ao Vivo / DVR | — | campos do DVR; sintonizadores e guia aparecem desativados |
 | Plugins | — | lista de repositórios |
 | Redes | — | todos os campos (portas e HTTPS ficam com o Docker e o proxy do PugotiLab) |
-| Chaves da API | criar (o token aparece uma vez; só o hash é guardado), usar por `X-PugotiCine-Token` (acesso de admin), revogar | — |
+| Chaves da API | criar (o token aparece uma vez; só o hash é guardado), usar por `X-Pugoticine-Token` (acesso de admin), revogar | — |
 | Backups | criar (`.tar` com cópias consistentes de `pugoticine.db`, `painel.db` e `salas.db` + `manifest.json`), baixar, excluir | restaurar (responde 501 com aviso) |
 | Registros | arquivos `log_AAAAMMDD.log` reais do processo (7 dias) e leitura; aviso de **resposta lenta** aplicado | — |
 | Tarefas Agendadas | Varrer a biblioteca e Atualizar metadados do Radarr: última e próxima execução, duração, resultado, **Executar** | — |
 
-O PugotiCine também ganhou duas coisas novas:
-- `GET /api/marca`, que qualquer pessoa logada lê: nome do servidor e CSS.
+O Pugoticine também ganhou duas coisas novas:
+- `GET /api/servidor`, que qualquer pessoa logada lê: nome do servidor e versão. (A aba Marca foi removida em 04/11/2026: o Pugoticine é um serviço próprio.)
 - O limite de "assistido" no `store.saveProgress`, que antes era fixo em 90% e agora vem de Retomar.

@@ -1,5 +1,5 @@
-// Rotas do Painel (só administrador, exceto /api/marca). Cada tela do menu do Painel do Jellyfin tem sua rota; o que
-// já tem efeito no PugotiCine funciona de verdade, o resto é salvo e a tela avisa (ver efeito em configuracao.ts).
+// Rotas do Painel (só administrador, exceto /api/servidor). Cada tela do menu do Painel do Jellyfin tem sua rota; o que
+// já tem efeito no Pugoticine funciona de verdade, o resto é salvo e a tela avisa (ver efeito em configuracao.ts).
 import fs from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { MediaItem, PugotiProfile } from "../types.js";
@@ -29,7 +29,7 @@ export class RotasPainel {
   private readonly ultimosRegistros = new Map<string, number>();
   readonly agendador: Agendador;
   constructor(private readonly c: ContextoPainel) {
-    // Tarefas do Jellyfin que existem no PugotiCine (nomes e categorias do Localization/Core/pt-BR.json).
+    // Tarefas do Jellyfin que existem no Pugoticine (nomes e categorias do Localization/Core/pt-BR.json).
     this.agendador = new Agendador(c.banco.db, (t, ok, mensagem) => c.banco.registrar(ok ? "TaskCompleted" : "TaskFailed", `${t.nome} ${ok ? "concluída" : "falhou"}`, null, mensagem ?? "", ok ? "Information" : "Error"));
     const intervalo = { tipo: "intervalo" as const, intervaloMs: c.intervaloMs };
     this.agendador.registrar({ id: "varredura", nome: "Escanear a Biblioteca de Mídia", categoria: "Biblioteca", descricao: "Escaneie a sua biblioteca de mídia para arquivos novos e atualize os metadados.",
@@ -68,7 +68,7 @@ export class RotasPainel {
       this.ultimosRegistros.set(chave, Date.now());
       const ip = String(req.headers["x-forwarded-for"] ?? req.socket.remoteAddress ?? "").split(",")[0].trim();
       if (this.c.banco.registrarAcesso(perfil.username, perfil.displayName, perfil.role, ua, ip))
-        this.c.banco.registrar("SessionStarted", `${perfil.displayName} está online no PugotiCine Web`, perfil.username);
+        this.c.banco.registrar("SessionStarted", `${perfil.displayName} está online no Pugoticine Web`, perfil.username);
     }
     return this.c.banco.usuario(perfil.username)?.desativado ? "Sua conta está desativada neste servidor. Fale com o administrador." : null;
   }
@@ -119,7 +119,7 @@ export class RotasPainel {
     const servidor = { ...infoServidor(this.c.versao, this.c.ffmpeg), nome: String(geral.ServerName) };
     const visao = montarPainel({ catalogo: this.c.catalogo(), ultimaVarredura: this.c.ultimaVarredura(), intervaloVarreduraMs: this.c.intervaloMs,
       raizMidia: this.c.raizMidia, atividade: this.c.atividadeProgresso(), agora: new Date(), servidor,
-      discos: [disco(this.c.raizMidia, "Mídia"), disco(this.c.pastaDados, "Dados do PugotiCine")] });
+      discos: [disco(this.c.raizMidia, "Mídia"), disco(this.c.pastaDados, "Dados do Pugoticine")] });
     const tipos = Object.fromEntries(TIPOS_BIBLIOTECA.map(x => [x.valor, x.rotulo]));
     visao.bibliotecas = this.c.bibliotecas.bibliotecas().map(b => ({ nome: b.nome, tipo: tipos[b.tipo], caminho: b.pastas.join(", "), itens: b.itens,
       ultimaVarredura: b.ultimaVarredura, proximaVarredura: visao.bibliotecas[0]?.proximaVarredura ?? null }));
@@ -134,9 +134,9 @@ export class RotasPainel {
   async tratar(req: IncomingMessage, res: ServerResponse, url: URL, perfil: PugotiProfile): Promise<boolean> {
     const { json, banco } = this.c;
     const caminho = url.pathname;
-    if (caminho === "/api/marca" && req.method === "GET") {
-      const marca = banco.ler("marca"), geral = banco.ler("geral");
-      json(res, 200, { nomeServidor: geral.ServerName, cssPersonalizado: marca.CustomCss, versao: this.c.versao });
+    // Nome do servidor (Painel › Geral) e versão, para o título da página e o topo do menu do Painel.
+    if (caminho === "/api/servidor" && req.method === "GET") {
+      json(res, 200, { nomeServidor: banco.ler("geral").ServerName, versao: this.c.versao });
       return true;
     }
     if (!caminho.startsWith("/api/painel") && caminho !== "/api/configuracao/reproducao") return false;
@@ -230,7 +230,7 @@ export class RotasPainel {
           const { confirmar } = await this.c.corpo<{ confirmar?: string }>(req).catch(() => ({ confirmar: undefined }));
           if (confirmar !== r[1]) { json(res, 400, { error: "Confirme a restauração digitando o nome do backup." }); return true; }
           const pedido = await this.c.backups.agendarRestauracao(r[1]);
-          banco.registrar("BackupRestoreScheduled", `Restauração agendada: ${r[1]}`, perfil.username, `Backup de segurança: ${pedido.seguranca}. Será aplicada ao reiniciar o PugotiCine.`, "Warning");
+          banco.registrar("BackupRestoreScheduled", `Restauração agendada: ${r[1]}`, perfil.username, `Backup de segurança: ${pedido.seguranca}. Será aplicada ao reiniciar o Pugoticine.`, "Warning");
           json(res, 200, { restauracaoPendente: pedido });
           return true;
         }

@@ -1,5 +1,5 @@
 // PQA-221: player em tela cheia no estilo do Jellyfin (controllers/playback/video), no Chromium do sistema contra o
-// PugotiCine em Docker: ocupa a tela inteira com "Título (Ano)"; controles somem após 3 s tocando e voltam ao mexer o
+// Pugoticine em Docker: ocupa a tela inteira com "Título (Ano)"; controles somem após 3 s tocando e voltam ao mexer o
 // mouse; play/pausa (botão, espaço, K), voltar 10 s / avançar 30 s (J/L e setas), volume e mudo (M), barra de
 // progresso, "Termina às", menus de legendas, áudio e configurações (velocidade, proporção, informações); trocar
 // legenda de texto não recarrega o vídeo; Esc fecha.

@@ -1,6 +1,6 @@
 # Cópia isolada para testar o Painel sem tocar no ambiente do player (3012/3015).
 #   PUGOTICINE_MIDIA=~/IA/Fontes/Pugoticine-midia-teste docker compose -p pugoticine-painel -f dev/compose.painel.yml up -d --build
-#   PugotiCine: http://127.0.0.1:3022 · login de desenvolvimento: http://127.0.0.1:3025/auth
+#   Pugoticine: http://127.0.0.1:3022 · login de desenvolvimento: http://127.0.0.1:3025/auth
 services:
   pugoticine:
     build: ..

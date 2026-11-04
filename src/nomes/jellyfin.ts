@@ -1,4 +1,4 @@
-// Regras de nomes de arquivos do Jellyfin 10.11.10 (Emby.Naming), portadas para o PugotiCine.
+// Regras de nomes de arquivos do Jellyfin 10.11.10 (Emby.Naming), portadas para o Pugoticine.
 // Fonte: motor/servidor/Emby.Naming (EpisodePathParser, EpisodeResolver, SeasonPathParser, SeriesResolver,
 // SeriesPathParser, VideoResolver, CleanStringParser, CleanDateTimeParser, ExtraRuleResolver, StubResolver).
 // Os dados (expressões, extensões, regras) vêm de opcoes-jellyfin.ts, exportados do próprio binário pelo oráculo, e o

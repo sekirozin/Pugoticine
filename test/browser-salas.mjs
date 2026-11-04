@@ -1,5 +1,5 @@
 // PQA-251: salas sincronizadas no navegador real (botão "Salas de Filmes" no cabeçalho, como o SyncPlay) (Chromium do sistema) com DUAS pessoas ao mesmo tempo, contra o
-// PugotiCine em Docker (dev/compose.salas.yml, porta 3032) e o filme de teste de 10 min:
+// Pugoticine em Docker (dev/compose.salas.yml, porta 3032) e o filme de teste de 10 min:
 //  - sekiro cria uma sala privada convidando o marcos; mael não vê a sala; senha errada é recusada;
 //  - os dois entram e assistem; play, pause e pulo feitos por um aparecem no outro;
 //  - posição dos dois com diferença < 1 s; uma deriva provocada (1,5 s) é corrigida sozinha.

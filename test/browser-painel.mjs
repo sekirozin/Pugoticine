@@ -43,7 +43,7 @@ try {
   assert.equal(await admin.evaluate(() => getComputedStyle(document.querySelector("#player-modal")).position), "fixed");
   assert.ok(await admin.evaluate(() => document.querySelector(".painel-app").getBoundingClientRect().top) < 140, "Painel logo abaixo da barra do topo");
   const servidor = await admin.locator("[data-painel-servidor]").innerText();
-  assert.match(servidor, /PugotiCine/);
+  assert.match(servidor, /Pugoticine/);
   assert.match(servidor, /FFmpeg\s+\d/);
   assert.equal(await admin.locator('[data-contagem="filmes"]').innerText(), String(filmes.length));
   const assistindo = await admin.locator("[data-painel-assistindo]").innerText();

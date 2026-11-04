@@ -8,7 +8,7 @@ import type { MediaItem } from "../types.js";
 const filme = (id: string, title: string, size: number, legendas = 0) => ({ id, title, year: 2020, size, subtitles: Array(legendas).fill({}) }) as unknown as MediaItem;
 const agora = new Date("2026-11-03T15:00:00Z");
 const ha = (s: number) => new Date(agora.getTime() - s * 1000).toISOString();
-const servidor = { nome: "PugotiCine" } as InfoServidor;
+const servidor = { nome: "Pugoticine" } as InfoServidor;
 
 test("PQA-230: contagens, assistindo agora, atividade e próxima varredura", () => {
   const p = montarPainel({

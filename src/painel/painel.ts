@@ -39,7 +39,7 @@ export function versaoFfmpeg(ffmpeg = "ffmpeg"): string {
 export function infoServidor(versaoApp: string, ffmpeg = "ffmpeg"): InfoServidor {
   const cpus = os.cpus();
   return {
-    nome: "PugotiCine", versao: versaoApp, node: process.version, sistema: `${os.type()} ${os.release()}`,
+    nome: "Pugoticine", versao: versaoApp, node: process.version, sistema: `${os.type()} ${os.release()}`,
     arquitetura: os.arch(), cpu: cpus[0]?.model?.trim() ?? "desconhecida", nucleos: cpus.length,
     cargaMedia: os.loadavg().map(v => Math.round(v * 100) / 100), memoriaTotal: os.totalmem(), memoriaLivre: os.freemem(),
     memoriaProcesso: process.memoryUsage().rss, ligadoDesde: new Date(Date.now() - process.uptime() * 1000).toISOString(),

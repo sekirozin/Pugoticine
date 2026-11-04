@@ -103,7 +103,7 @@ export class Backups {
         arquivos.push({ nome: f.nome, dados: fs.readFileSync(destino) });
         incluidos.push(f.nome);
       }
-      const manifesto = { aplicativo: "PugotiCine", versao: this.versao, criadoEm: new Date().toISOString(), arquivos: incluidos };
+      const manifesto = { aplicativo: "Pugoticine", versao: this.versao, criadoEm: new Date().toISOString(), arquivos: incluidos };
       arquivos.unshift({ nome: "manifest.json", dados: Buffer.from(JSON.stringify(manifesto, null, 2)) });
       const final = path.join(this.pasta, nome);
       fs.writeFileSync(`${final}.tmp`, montarTar(arquivos));
@@ -127,7 +127,7 @@ export class Backups {
   }
   get pastaPendente(): string { return path.join(path.dirname(this.pasta), "restauracao-pendente"); }
 
-  /** Valida um backup: manifesto do PugotiCine, só bancos conhecidos e integridade de cada SQLite. */
+  /** Valida um backup: manifesto do Pugoticine, só bancos conhecidos e integridade de cada SQLite. */
   validar(nome: string): { manifesto: { aplicativo: string; versao: string; criadoEm: string; arquivos: string[] }; arquivos: { nome: string; dados: Buffer }[] } {
     const arquivo = this.caminho(nome);
     if (!arquivo) throw new Error("Backup não encontrado.");
@@ -136,7 +136,8 @@ export class Backups {
     if (!bruto) throw new Error("O backup não tem manifest.json.");
     let manifesto;
     try { manifesto = JSON.parse(bruto.dados.toString("utf8")); } catch { throw new Error("manifest.json inválido."); }
-    if (manifesto?.aplicativo !== "PugotiCine") throw new Error("Este backup não é do PugotiCine.");
+    // Backups antigos foram marcados "PugotiCine" (nome antigo): continuam válidos.
+    if (manifesto?.aplicativo !== "Pugoticine" && manifesto?.aplicativo !== "Pugoti" + "Cine") throw new Error("Este backup não é do Pugoticine.");
     const conhecidos = new Set(this.fontes.map(f => f.nome));
     const bancos = conteudo.filter(a => a.nome !== "manifest.json");
     if (!bancos.length) throw new Error("O backup não tem bancos de dados.");

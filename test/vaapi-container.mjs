@@ -1,4 +1,4 @@
-// PQA-222: conversão pela GPU (VAAPI) no PugotiCine em Docker (compose.desenvolvimento.yml com /dev/dri e
+// PQA-222: conversão pela GPU (VAAPI) no Pugoticine em Docker (compose.desenvolvimento.yml com /dev/dri e
 // PUGOTICINE_ACELERACAO=vaapi). Pede 720p do filme de teste 1080p (força conversão) e confere: o FFmpeg em uso é o
 // h264_vaapi; os segmentos saem em H.264 720p e começam onde a playlist diz (inclusive depois de um salto); mede o tempo.
 // Uso: node test/vaapi-container.mjs. Requer docker, ffprobe e o compose no ar com GPU.

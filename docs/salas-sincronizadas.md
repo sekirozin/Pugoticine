@@ -1,4 +1,4 @@
-# Salas de filme sincronizadas (PugotiCine)
+# Salas de filme sincronizadas (Pugoticine)
 
 O pedido: assistir junto com outras pessoas do PugotiLab. A pessoa cria uma sala e convida usuários. A sala pode ser de três tipos:
 - **pública**, que aparece para todos;
@@ -25,9 +25,9 @@ A referência foi o SyncPlay do Jellyfin 10.11.10. Bastou ler o código-fonte qu
 - **Correção de deriva:** `PlaybackCore.js`.
   - Os limites (:40–70) são: `minDelaySpeedToSync` 60 ms, `maxDelaySpeedToSync` 3000 ms, `speedToSyncDuration` 1000 ms e `minDelaySkipToSync` 400 ms.
   - Em `syncPlaybackTime` (:520–610), uma diferença entre 60 ms e 3 s ajusta a velocidade do vídeo para `1 + diferença/1000` durante 1 s (**SpeedToSync**). Acima disso, o vídeo pula para a posição do grupo (**SkipToSync**).
-  - No Jellyfin essa correção vem desligada por padrão (`enableSyncCorrection` = false, :69). No PugotiCine ela fica sempre ligada, porque o pedido é manter a diferença abaixo de 1 s.
+  - No Jellyfin essa correção vem desligada por padrão (`enableSyncCorrection` = false, :69). No Pugoticine ela fica sempre ligada, porque o pedido é manter a diferença abaixo de 1 s.
 
-## Desenho no PugotiCine
+## Desenho no Pugoticine
 
 ### Servidor: `src/salas/salas.ts` (lógica) e `src/salas/rotas.ts` (HTTP)
 
@@ -87,5 +87,5 @@ docker compose -p pugoticine-salas -f compose.desenvolvimento.yml -f dev/compose
 ## Pendências
 - **Fila de filmes:** o SyncPlay tem fila (`QueueCore`); a sala tem um filme por vez.
 - **Chat e reações** na sala.
-- **Notificar o convidado** fora do PugotiCine, por exemplo pelo PugotiLab. Hoje o convite aparece na lista de salas da pessoa.
-- **Usuários conhecidos:** o convite aceita qualquer `username` válido. O PugotiCine não tem a lista de usuários do PugotiLab para conferir se ele existe.
+- **Notificar o convidado** fora do Pugoticine, por exemplo pelo PugotiLab. Hoje o convite aparece na lista de salas da pessoa.
+- **Usuários conhecidos:** o convite aceita qualquer `username` válido. O Pugoticine não tem a lista de usuários do PugotiLab para conferir se ele existe.

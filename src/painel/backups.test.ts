@@ -1,5 +1,5 @@
 // PQA-239: restaurar backup como o BackupService do Jellyfin, em duas fases: o .tar é validado (checksum, manifesto
-// do PugotiCine, só bancos conhecidos, integrity_check), um backup de segurança é criado, os bancos esperam em
+// do Pugoticine, só bancos conhecidos, integrity_check), um backup de segurança é criado, os bancos esperam em
 // restauracao-pendente e são aplicados na inicialização trocando o arquivo e apagando -wal/-shm. Cancelar desfaz.
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -55,11 +55,11 @@ test("PQA-239: cancelar e recusar backups inválidos", async () => {
   const falso = (nome: string, arquivos: { nome: string; dados: Buffer }[]) => fs.writeFileSync(path.join(backups.pasta, nome), montarTar(arquivos));
   const manifesto = (aplicativo: string) => ({ nome: "manifest.json", dados: Buffer.from(JSON.stringify({ aplicativo, arquivos: [] })) });
   falso("pugoticine-backup-20000101000001.tar", [manifesto("Jellyfin"), { nome: "painel.db", dados: fs.readFileSync(fontes[0].arquivo) }]);
-  falso("pugoticine-backup-20000101000002.tar", [manifesto("PugotiCine"), { nome: "../etc/passwd", dados: Buffer.from("x") }]);
-  falso("pugoticine-backup-20000101000003.tar", [manifesto("PugotiCine"), { nome: "painel.db", dados: Buffer.alloc(8192, 1) }]);
+  falso("pugoticine-backup-20000101000002.tar", [manifesto("Pugoticine"), { nome: "../etc/passwd", dados: Buffer.from("x") }]);
+  falso("pugoticine-backup-20000101000003.tar", [manifesto("Pugoticine"), { nome: "painel.db", dados: Buffer.alloc(8192, 1) }]);
   falso("pugoticine-backup-20000101000004.tar", [{ nome: "painel.db", dados: fs.readFileSync(fontes[0].arquivo) }]);
-  falso("pugoticine-backup-20000101000005.tar", [manifesto("PugotiCine")]);
-  await assert.rejects(backups.agendarRestauracao("pugoticine-backup-20000101000001.tar"), /não é do PugotiCine/);
+  falso("pugoticine-backup-20000101000005.tar", [manifesto("Pugoticine")]);
+  await assert.rejects(backups.agendarRestauracao("pugoticine-backup-20000101000001.tar"), /não é do Pugoticine/);
   await assert.rejects(backups.agendarRestauracao("pugoticine-backup-20000101000002.tar"), /Arquivo desconhecido/);
   await assert.rejects(backups.agendarRestauracao("pugoticine-backup-20000101000003.tar"), /corrompido/);
   await assert.rejects(backups.agendarRestauracao("pugoticine-backup-20000101000004.tar"), /manifest\.json/);

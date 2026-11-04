@@ -1,4 +1,4 @@
-// PQA-223: o que se salva no Painel › Reprodução › Transcodificação muda o player de verdade (PugotiCine em Docker,
+// PQA-223: o que se salva no Painel › Reprodução › Transcodificação muda o player de verdade (Pugoticine em Docker,
 // compose.desenvolvimento.yml): "Nenhum" converte por software com o preset e o CRF escolhidos; "VAAPI" volta para a GPU.
 // Ao final restaura o que estava salvo antes. Uso: node test/painel-player-container.mjs.
 import assert from "node:assert/strict";

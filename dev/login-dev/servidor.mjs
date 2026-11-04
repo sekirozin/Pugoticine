@@ -21,7 +21,7 @@ http.createServer((req, res) => {
     const usuario = url.searchParams.get("usuario");
     const volta = url.searchParams.get("return") || "http://127.0.0.1:3012/";
     if (!USUARIOS[usuario]) { res.writeHead(400); return res.end("Usuário inválido."); }
-    // Cookie por host (127.0.0.1), vale para qualquer porta: o PugotiCine em :3012 recebe.
+    // Cookie por host (127.0.0.1), vale para qualquer porta: o Pugoticine em :3012 recebe.
     res.writeHead(302, { "Set-Cookie": `pugotilab_session=dev-${usuario}; Path=/; HttpOnly; SameSite=Lax`, Location: volta });
     return res.end();
   }
@@ -34,7 +34,7 @@ http.createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     return res.end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Login de desenvolvimento</title>
 <body style="font-family:system-ui;background:#111;color:#eee;display:grid;place-content:center;min-height:100vh;gap:12px;text-align:center">
-<h1 style="margin:0">PugotiLab · login de desenvolvimento</h1><p style="color:#aaa;margin:0">Só para testar o PugotiCine no notebook.</p>
+<h1 style="margin:0">PugotiLab · login de desenvolvimento</h1><p style="color:#aaa;margin:0">Só para testar o Pugoticine no notebook.</p>
 ${Object.values(USUARIOS).map(u => `<a style="padding:12px 20px;border-radius:10px;background:#d97706;color:#fff;text-decoration:none;font-weight:700" href="/auth/entrar?usuario=${u.username}&return=${encodeURIComponent(volta)}">Entrar como ${escapar(u.displayName)} (${u.role})</a>`).join("")}
 </body>`);
   }

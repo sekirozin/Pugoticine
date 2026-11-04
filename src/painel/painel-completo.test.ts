@@ -17,7 +17,7 @@ test.after(() => fs.rmSync(pasta, { recursive: true, force: true }));
 
 test("PQA-232: menu igual ao do Painel do Jellyfin (grupos, itens, subpáginas)", () => {
   const titulos = (grupo: string, pai?: string) => PAGINAS.filter(p => p.grupo === grupo && p.pai === pai).map(p => p.titulo);
-  assert.deepEqual(titulos("Servidor"), ["Painel", "Geral", "Marca", "Usuários"]);
+  assert.deepEqual(titulos("Servidor"), ["Painel", "Geral", "Usuários"], "sem a aba Marca");
   assert.deepEqual(titulos("Servidor", "Bibliotecas"), ["Bibliotecas", "Exibir", "Metadados", "Configurações de NFO"]);
   assert.deepEqual(titulos("Servidor", "Reprodução"), ["Transcodificação", "Retomar", "Transmissão", "Pré-visualizações de vídeo"]);
   assert.deepEqual(titulos("Dispositivos"), ["Dispositivos", "Atividade"]);
@@ -108,7 +108,7 @@ test("PQA-232: backup .tar legível pelo tar do sistema, com os bancos consisten
   assert.deepEqual(execFileSync("tar", ["-tf", path.join(pasta, "backups", b.nome)], { encoding: "utf8" }).trim().split("\n"), ["manifest.json", "pugoticine.db"]);
   const saida = fs.mkdtempSync(path.join(pasta, "x-"));
   execFileSync("tar", ["-xf", path.join(pasta, "backups", b.nome), "-C", saida]);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(saida, "manifest.json"), "utf8")).aplicativo, "PugotiCine");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(saida, "manifest.json"), "utf8")).aplicativo, "Pugoticine");
   const copia = new Database(path.join(saida, "pugoticine.db"), { readonly: true });
   assert.equal((copia.prepare("SELECT v FROM t").get() as { v: string }).v, "ola");
   copia.close();

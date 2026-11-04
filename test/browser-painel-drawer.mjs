@@ -31,7 +31,7 @@ try {
   await d.waitForFunction(() => Math.round(document.querySelector("#sidebar").getBoundingClientRect().width) === 240, null, { timeout: 3000 }); // fim da transição
   assert.deepEqual((await caixa(d, "#sidebar")).w, 240, "menu do Painel com 240 px, como o drawer do Jellyfin");
   assert.ok((await caixa(d, "[data-painel-conteudo]")).x >= 240, "conteúdo ao lado do menu");
-  assert.match(await d.locator(".painel-drawer-topo").innerText(), /PugotiCine[\s\S]*\d+\.\d+\.\d+/, "cabeçalho com nome e versão");
+  assert.match(await d.locator(".painel-drawer-topo").innerText(), /Pugoticine[\s\S]*\d+\.\d+\.\d+/, "cabeçalho com nome e versão");
   await d.locator('[data-painel-ir="geral"]').click();
   await d.waitForSelector('[name="ServerName"]');
   assert.equal(await d.locator(".topbar").innerHTML(), barra, "barra superior intacta");

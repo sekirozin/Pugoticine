@@ -1,4 +1,4 @@
-// PQA-225: Filmes / Séries / Animes separados como no Jellyfin, no Chromium contra o PugotiCine em Docker: o menu
+// PQA-225: Filmes / Séries / Animes separados como no Jellyfin, no Chromium contra o Pugoticine em Docker: o menu
 // lateral tem uma entrada por biblioteca; o Início tem "Adicionados recentemente em <biblioteca>"; a biblioteca de
 // animes mostra a série num cartão só (com nº de episódios), não episódios soltos; a série abre com temporadas e
 // episódios nomeados; o episódio toca no player; filmes não aparecem na biblioteca de animes.

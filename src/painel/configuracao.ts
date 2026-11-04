@@ -1,9 +1,9 @@
-// Telas do Painel do Jellyfin 10.11.10 reproduzidas no PugotiCine: menu lateral (jellyfin-web
+// Telas do Painel do Jellyfin 10.11.10 reproduzidas no Pugoticine: menu lateral (jellyfin-web
 // src/apps/dashboard/components/drawer/sections/*.tsx), campos e textos em pt-BR (strings/pt-br.json) e valores
 // padrão dos modelos do servidor (MediaBrowser.Model/Configuration/ServerConfiguration.cs, EncodingOptions.cs,
 // TrickplayOptions.cs, XbmcMetadataOptions.cs, BrandingOptions.cs, LiveTv/LiveTvOptions.cs,
 // MediaBrowser.Common/Net/NetworkConfiguration.cs).
-// Cada página diz o que tem efeito de verdade no PugotiCine ("efeito"); o que só é guardado mostra um aviso claro.
+// Cada página diz o que tem efeito de verdade no Pugoticine ("efeito"); o que só é guardado mostra um aviso claro.
 
 export type TipoCampo = "texto" | "senha" | "numero" | "booleano" | "selecao" | "multipla" | "lista" | "textoLongo";
 export interface Opcao { valor: string; rotulo: string }
@@ -19,16 +19,16 @@ export interface Pagina {
 }
 
 const sn = (valor: string, rotulo: string): Opcao => ({ valor, rotulo });
-const NAO_IMPLEMENTADO = "Ainda não implementado no PugotiCine: a configuração é salva, mas não tem efeito por enquanto.";
+const NAO_IMPLEMENTADO = "Ainda não implementado no Pugoticine: a configuração é salva, mas não tem efeito por enquanto.";
 
 export const PAGINAS: Pagina[] = [
   { id: "painel", titulo: "Painel", grupo: "Servidor", especial: true, efeito: { tipo: "real", texto: "Visão geral com dados reais do servidor." }, secoes: [] },
   {
     id: "geral", titulo: "Geral", grupo: "Servidor",
-    efeito: { tipo: "parcial", texto: "O nome do servidor já é usado pelo PugotiCine (Painel e título da página). Idioma, locais, Quick Connect e rendimento: " + NAO_IMPLEMENTADO },
+    efeito: { tipo: "parcial", texto: "O nome do servidor já é usado pelo Pugoticine (Painel e título da página). Idioma, locais, Quick Connect e rendimento: " + NAO_IMPLEMENTADO },
     secoes: [
       { titulo: "Configurações", campos: [
-        { chave: "ServerName", tipo: "texto", rotulo: "Nome do servidor", ajuda: "Este nome será usado para identificar o servidor e por padrão o nome do computador será usado.", padrao: "PugotiCine", maximoTexto: 80 },
+        { chave: "ServerName", tipo: "texto", rotulo: "Nome do servidor", ajuda: "Este nome será usado para identificar o servidor e por padrão o nome do computador será usado.", padrao: "Pugoticine", maximoTexto: 80 },
         { chave: "UICulture", tipo: "selecao", rotulo: "Idioma preferido de exibição", padrao: "pt-BR", opcoes: [sn("pt-BR", "Português (Brasil)"), sn("en-US", "English (United States)"), sn("es", "Español"), sn("pt-PT", "Português (Portugal)")] }
       ] },
       { titulo: "Locais", campos: [
@@ -44,17 +44,9 @@ export const PAGINAS: Pagina[] = [
       ] }
     ]
   },
-  {
-    id: "marca", titulo: "Marca", grupo: "Servidor",
-    efeito: { tipo: "parcial", texto: "O código CSS personalizado é aplicado de verdade na interface. Imagem de abertura e aviso no login: " + NAO_IMPLEMENTADO + " (o login é feito pelo PugotiLab)." },
-    secoes: [{ campos: [
-      { chave: "SplashscreenEnabled", tipo: "booleano", rotulo: "Ativar imagem na tela de abertura", ajuda: "Imagens personalizadas devem ter uma proporção de 16x9 com um tamanho mínimo de 1920x1080.", padrao: false },
-      { chave: "LoginDisclaimer", tipo: "textoLongo", rotulo: "Aviso legal no login", ajuda: "Um aviso será exibido na parte inferior da página de login.", padrao: "", maximoTexto: 4000 },
-      { chave: "CustomCss", tipo: "textoLongo", rotulo: "Código CSS personalizado", ajuda: "Aplica a sua estilização CSS personalizada para a interface web.", padrao: "", maximoTexto: 50000 }
-    ] }]
-  },
+  // Marca (BrandingOptions do Jellyfin) removida: o Pugoticine é um serviço próprio, sem CSS/aviso personalizáveis.
   { id: "usuarios", titulo: "Usuários", grupo: "Servidor", especial: true, efeito: { tipo: "parcial", texto: "Lista quem já entrou (contas do PugotiLab: nome, senha e login são do PugotiLab). Têm efeito de verdade: desativar, acesso por biblioteca e classificação etária máxima/bloquear sem classificação. Ocultar, limite de bitrate, sessões simultâneas e acesso às salas: " + NAO_IMPLEMENTADO }, secoes: [] },
-  { id: "bibliotecas", titulo: "Bibliotecas", grupo: "Servidor", pai: "Bibliotecas", especial: true, efeito: { tipo: "parcial", texto: "Adicionar, editar, remover e rastrear bibliotecas funciona de verdade (tipo, pastas, ativar e monitoramento em tempo real); séries e animes recebem o nome do episódio pelas regras do Jellyfin. Idioma/país dos metadados e atualização automática: " + NAO_IMPLEMENTADO + " Música e Livros: o PugotiCine só reproduz vídeo." }, secoes: [] },
+  { id: "bibliotecas", titulo: "Bibliotecas", grupo: "Servidor", pai: "Bibliotecas", especial: true, efeito: { tipo: "parcial", texto: "Adicionar, editar, remover e rastrear bibliotecas funciona de verdade (tipo, pastas, ativar e monitoramento em tempo real); séries e animes recebem o nome do episódio pelas regras do Jellyfin. Idioma/país dos metadados e atualização automática: " + NAO_IMPLEMENTADO + " Música e Livros: o Pugoticine só reproduz vídeo." }, secoes: [] },
   {
     id: "bibliotecas-exibicao", titulo: "Exibir", grupo: "Servidor", pai: "Bibliotecas", efeito: { tipo: "salvo", texto: NAO_IMPLEMENTADO },
     secoes: [{ campos: [
@@ -182,8 +174,8 @@ export const PAGINAS: Pagina[] = [
       { chave: "ProcessThreads", tipo: "numero", rotulo: "Tarefas de processamento FFmpeg", padrao: 1, min: 0, max: 32 }
     ] }]
   },
-  { id: "dispositivos", titulo: "Dispositivos", grupo: "Dispositivos", especial: true, efeito: { tipo: "real", texto: "Lista real dos navegadores que já acessaram o PugotiCine." }, secoes: [] },
-  { id: "atividade", titulo: "Atividade", grupo: "Dispositivos", especial: true, efeito: { tipo: "real", texto: "Registro real de eventos do PugotiCine." }, secoes: [] },
+  { id: "dispositivos", titulo: "Dispositivos", grupo: "Dispositivos", especial: true, efeito: { tipo: "real", texto: "Lista real dos navegadores que já acessaram o Pugoticine." }, secoes: [] },
+  { id: "atividade", titulo: "Atividade", grupo: "Dispositivos", especial: true, efeito: { tipo: "real", texto: "Registro real de eventos do Pugoticine." }, secoes: [] },
   { id: "tv-ao-vivo", titulo: "TV ao Vivo", grupo: "TV ao Vivo", especial: true, efeito: { tipo: "salvo", texto: "TV ao Vivo " + NAO_IMPLEMENTADO.toLowerCase() }, secoes: [] },
   {
     id: "dvr", titulo: "DVR", grupo: "TV ao Vivo", efeito: { tipo: "salvo", texto: NAO_IMPLEMENTADO },
@@ -209,7 +201,7 @@ export const PAGINAS: Pagina[] = [
     ]
   },
   {
-    id: "plugins", titulo: "Plugins", grupo: "Plugins", especial: true, efeito: { tipo: "salvo", texto: "Plugins " + NAO_IMPLEMENTADO.toLowerCase() + " Os plugins do Jellyfin são .NET e não rodam no PugotiCine (Node); a tela lista as integrações embutidas e a lista de repositórios é só salva." },
+    id: "plugins", titulo: "Plugins", grupo: "Plugins", especial: true, efeito: { tipo: "salvo", texto: "Plugins " + NAO_IMPLEMENTADO.toLowerCase() + " Os plugins do Jellyfin são .NET e não rodam no Pugoticine (Node); a tela lista as integrações embutidas e a lista de repositórios é só salva." },
     secoes: [{ titulo: "Gerenciar Repositórios", campos: [
       { chave: "PluginRepositories", tipo: "lista", rotulo: "Repositórios", ajuda: "Um endereço por linha.", padrao: ["https://repo.jellyfin.org/files/plugin/manifest.json"], validarItem: "url" }
     ] }]
@@ -251,17 +243,17 @@ export const PAGINAS: Pagina[] = [
       ] }
     ]
   },
-  { id: "chaves", titulo: "Chaves da API", grupo: "Avançado", especial: true, efeito: { tipo: "real", texto: "Chaves reais: dão acesso de administrador à API pelo cabeçalho X-PugotiCine-Token." }, secoes: [] },
-  { id: "backups", titulo: "Backups", grupo: "Avançado", especial: true, efeito: { tipo: "real", texto: "Criar, baixar, excluir e restaurar funcionam de verdade. Restaurar valida o backup, cria antes um backup de segurança e troca os bancos na próxima inicialização do PugotiCine (reinicie o container). Mídias e configurações de ambiente não entram no backup." }, secoes: [] },
+  { id: "chaves", titulo: "Chaves da API", grupo: "Avançado", especial: true, efeito: { tipo: "real", texto: "Chaves reais: dão acesso de administrador à API pelo cabeçalho X-Pugoticine-Token." }, secoes: [] },
+  { id: "backups", titulo: "Backups", grupo: "Avançado", especial: true, efeito: { tipo: "real", texto: "Criar, baixar, excluir e restaurar funcionam de verdade. Restaurar valida o backup, cria antes um backup de segurança e troca os bancos na próxima inicialização do Pugoticine (reinicie o container). Mídias e configurações de ambiente não entram no backup." }, secoes: [] },
   {
     id: "registros", titulo: "Registros", grupo: "Avançado", especial: true,
-    efeito: { tipo: "real", texto: "Arquivos de registro reais do processo do PugotiCine; o aviso de resposta lenta é aplicado de verdade." },
+    efeito: { tipo: "real", texto: "Arquivos de registro reais do processo do Pugoticine; o aviso de resposta lenta é aplicado de verdade." },
     secoes: [{ campos: [
       { chave: "EnableSlowResponseWarning", tipo: "booleano", rotulo: "Registrar mensagem de aviso se o servidor demorou para responder", padrao: true },
       { chave: "SlowResponseThresholdMs", tipo: "numero", rotulo: "Tempo em milissegundos para que uma resposta seja considerada lenta", padrao: 500, min: 50, max: 600000 }
     ] }]
   },
-  { id: "tarefas", titulo: "Tarefas Agendadas", grupo: "Avançado", especial: true, efeito: { tipo: "real", texto: "Tarefas do Jellyfin que existem no PugotiCine (varredura, metadados, limpeza de atividade, logs e temporários, otimizar banco). Iniciar e os gatilhos (diário, semanal, intervalo, na inicialização) funcionam de verdade. Tarefas de imagens de capítulos, trickplay, legendas e plugins: ainda não implementadas no PugotiCine." }, secoes: [] }
+  { id: "tarefas", titulo: "Tarefas Agendadas", grupo: "Avançado", especial: true, efeito: { tipo: "real", texto: "Tarefas do Jellyfin que existem no Pugoticine (varredura, metadados, limpeza de atividade, logs e temporários, otimizar banco). Iniciar e os gatilhos (diário, semanal, intervalo, na inicialização) funcionam de verdade. Tarefas de imagens de capítulos, trickplay, legendas e plugins: ainda não implementadas no Pugoticine." }, secoes: [] }
 ];
 
 export class ErroValidacao extends Error {

@@ -39,6 +39,7 @@ const restaurado = aplicarRestauracaoPendente(path.join(config.dataDir, "restaur
 if (restaurado) console.warn(`Backup restaurado: ${restaurado.backup} (${restaurado.arquivos.join(", ")}). Backup de segurança: ${restaurado.seguranca}.`);
 // Painel › Bibliotecas: o catálogo é a soma das bibliotecas (a padrão é MEDIA_ROOT, com os IDs de sempre).
 const bancoPainel = new BancoPainel(path.join(config.dataDir, "painel.db"));
+if (bancoPainel.migrarNomeAntigo()) console.log("Nome do servidor atualizado para Pugoticine.");
 if (restaurado) bancoPainel.registrar("BackupRestored", `Backup restaurado: ${restaurado.backup}`, null, `Backup de segurança: ${restaurado.seguranca}`, "Warning");
 const raizesPermitidas = (process.env.PUGOTICINE_PASTAS_PERMITIDAS ?? "/media").split(",").map(r => path.resolve(r.trim())).filter(Boolean);
 const catalog = new GerenciadorBibliotecas(bancoPainel.db, config.mediaRoot, raizesPermitidas, () => { lastScanAt = new Date().toISOString(); });
@@ -301,7 +302,8 @@ async function staticFile(req: IncomingMessage, res: ServerResponse): Promise<vo
     const contentType = extension === ".html" ? "text/html; charset=utf-8"
       : extension === ".css" ? "text/css; charset=utf-8"
         : extension === ".js" ? "text/javascript; charset=utf-8"
-          : extension === ".svg" ? "image/svg+xml" : "application/octet-stream";
+          : extension === ".svg" ? "image/svg+xml" : extension === ".png" ? "image/png"
+            : extension === ".webmanifest" ? "application/manifest+json; charset=utf-8" : "application/octet-stream";
     res.writeHead(200, { "content-type": contentType, "cache-control": extension === ".svg" ? "public, max-age=86400" : "no-cache" });
     res.end(data);
   } catch {
@@ -321,7 +323,7 @@ const server = http.createServer(async (req, res) => {
     if (req.url === "/health") { json(res, 200, { status: "ok", media: catalog.list().length, lastScanAt }); return; }
     if (req.url === "/api/organizador/concluido" && req.method === "POST") { await rotaOrganizador(req, res); return; }
     const rede = painel.acessoDeRede(req);
-    if (!rede.permitido) { res.writeHead(403, { "content-type": "text/plain; charset=utf-8" }); res.end(`Acesso negado pela configuração de Redes do PugotiCine (${rede.motivo}).`); return; }
+    if (!rede.permitido) { res.writeHead(403, { "content-type": "text/plain; charset=utf-8" }); res.end(`Acesso negado pela configuração de Redes do Pugoticine (${rede.motivo}).`); return; }
     if (req.url?.startsWith("/api/")) {
       const inicio = Date.now();
       await handleApi(req, res);

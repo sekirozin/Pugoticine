@@ -1,5 +1,5 @@
 // PQA-238: Painel › Tarefas Agendadas no navegador (Chromium do sistema) contra a cópia isolada (127.0.0.1:3022):
-// as tarefas do Jellyfin existentes no PugotiCine aparecem por categoria; iniciar uma tarefa registra a execução;
+// as tarefas do Jellyfin existentes no Pugoticine aparecem por categoria; iniciar uma tarefa registra a execução;
 // abrir a tarefa, adicionar e excluir gatilhos (diário, semanal, intervalo) persiste no servidor.
 import assert from "node:assert/strict";
 import pw from "/home/sekironote/IA/Ferramentas/pugotiread-app-deps/node_modules/playwright/index.js";

@@ -1,3 +1,4 @@
+import { icone } from "/icones.js";
 import { abrirPainel, fecharPainel } from "/painel.js";
 import { abrirOsd, definirDuracao, definirFonteDeInfo, fecharOsd } from "/player-osd.js";
 import { renderCatalogo } from "/inicio.js";
@@ -66,25 +67,24 @@ function renderPainelView() {
   abrirPainel(content, {
     api, escapeHtml, toast,
     aoVarrer: (media) => { state.media = media; },
-    aoMudarMarca: aplicarMarca,
+    aoMudarServidor: aplicarNomeServidor,
     // Cabeçalho do menu do Painel: volta ao app (o menu lateral normal reaparece).
     voltarAoInicio: () => { state.view = "home"; state.query = ""; updateNavigation(); render(); recarregarCatalogo(); },
     fecharMenu: () => { if (innerWidth <= 700) toggleMenu(false); }
   });
 }
 
-// Painel › Geral (nome do servidor) e Marca (CSS personalizado) valem para todo o app.
-async function aplicarMarca() {
+// Painel › Geral: o nome do servidor vira o título da página.
+async function aplicarNomeServidor() {
   try {
-    const marca = await api("/api/marca");
-    document.title = marca.nomeServidor || "Pugoticine";
-    let estilo = document.querySelector("#css-personalizado");
-    if (!estilo) { estilo = document.createElement("style"); estilo.id = "css-personalizado"; document.head.append(estilo); }
-    estilo.textContent = marca.cssPersonalizado || "";
-  } catch { /* sem marca: mantém o padrão */ }
+    const servidor = await api("/api/servidor");
+    document.title = servidor.nomeServidor || "Pugoticine";
+  } catch { /* mantém o padrão */ }
 }
 
 function render() {
+  // Painel só para administradores do PugotiLab (o servidor também recusa com 403); qualquer outro volta ao Início.
+  if (state.view === "painel" && state.profile?.role !== "admin") { state.view = "home"; updateNavigation(); }
   if (state.view === "painel") { renderPainelView(); return; }
   fecharPainel();
   // Catálogo no estilo de streaming (public/inicio.js): destaque, fileiras, cartões e janela de detalhes.
@@ -92,16 +92,12 @@ function render() {
 }
 
 // Menu lateral: uma entrada por biblioteca, com o ícone do tipo (como "Minha mídia" do Jellyfin).
-const ICONES_BIBLIOTECA = {
-  movies: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="m7 5 2-3m4 3 2-3m4 3 2-3M3 10h18"/>',
-  tvshows: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="m8 2 4 4 4-4"/>',
-  mixed: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="m8 2 4 4 4-4M10 10l5 2.5-5 2.5z"/>',
-  outro: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
-};
+// Ícone do Tabler por tipo de biblioteca.
+const ICONES_BIBLIOTECA = { movies: "movie", tvshows: "device-tv", mixed: "device-tv-old", outro: "folder" };
 function renderNavBibliotecas() {
   const lista = $("#nav-bibliotecas");
   if (!lista) return;
-  lista.innerHTML = state.bibliotecas.map((b) => `<button class="nav-item" data-view="biblioteca:${escapeHtml(b.id)}" title="${escapeHtml(b.nome)}"><svg viewBox="0 0 24 24">${ICONES_BIBLIOTECA[b.tipo] ?? ICONES_BIBLIOTECA.outro}</svg><span>${escapeHtml(b.nome)}</span></button>`).join("");
+  lista.innerHTML = state.bibliotecas.map((b) => `<button class="nav-item" data-view="biblioteca:${escapeHtml(b.id)}" title="${escapeHtml(b.nome)}">${icone(ICONES_BIBLIOTECA[b.tipo] ?? ICONES_BIBLIOTECA.outro)}<span>${escapeHtml(b.nome)}</span></button>`).join("");
   if (state.view === "movies") state.view = `biblioteca:${state.bibliotecas.find((b) => b.tipo === "movies")?.id ?? "filmes"}`;
   if (state.view.startsWith("biblioteca:") && !state.bibliotecas.some((b) => `biblioteca:${b.id}` === state.view)) state.view = "home";
   updateNavigation();
@@ -399,7 +395,7 @@ async function bootstrap() {
     if (data.profile.avatarUrl) $("#avatar").src = data.profile.avatarUrl;
     $("#scan-button").hidden = data.profile.role !== "admin";
     $("#painel-button").hidden = data.profile.role !== "admin";
-    aplicarMarca();
+    aplicarNomeServidor();
     render();
     window.dispatchEvent(new CustomEvent("pugoticine:pronto"));
     const requestedMedia = new URLSearchParams(location.search).get("play");
