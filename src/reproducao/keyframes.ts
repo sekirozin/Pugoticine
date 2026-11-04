@@ -2,7 +2,7 @@
 // Porte do Jellyfin 10.11.10 (Jellyfin.MediaEncoding.Keyframes): no MKV lê só o índice (SeekHead → Info, Tracks,
 // Cues), sem percorrer o arquivo; nos outros contêineres usa o ffprobe (pacotes com a flag K).
 // Tempos em ticks (100 ns), como no Jellyfin, para não acumular erro de arredondamento.
-import { spawnSync } from "node:child_process";
+import { rodarFfprobe } from "../probe.js";
 import fs from "node:fs";
 
 export interface DadosKeyframes { duracaoTicks: number; keyframesTicks: number[] }
@@ -128,14 +128,17 @@ export function keyframesMatroska(caminho: string): DadosKeyframes {
   }
 }
 
-/** Alternativa para outros contêineres: pacotes de vídeo com a flag K (como o FfProbeKeyframeExtractor). */
-export function keyframesFfprobe(caminho: string, ffprobe = "ffprobe"): DadosKeyframes {
-  const r = spawnSync(ffprobe, ["-v", "error", "-select_streams", "v:0", "-show_entries", "packet=pts_time,flags",
-    "-show_entries", "format=duration", "-of", "csv=p=0", caminho], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024, timeout: 300_000 });
-  if (r.status !== 0) throw new Error(`ffprobe não leu os keyframes: ${r.stderr.trim().slice(0, 200)}`);
+/** Alternativa para outros contêineres: pacotes de vídeo com a flag K (como o FfProbeKeyframeExtractor). Lê o arquivo
+ *  inteiro (minutos num HD), por isso roda sem bloquear o servidor. */
+export async function keyframesFfprobe(caminho: string, ffprobe = "ffprobe"): Promise<DadosKeyframes> {
+  let saida: string;
+  try {
+    saida = await rodarFfprobe(["-v", "error", "-select_streams", "v:0", "-show_entries", "packet=pts_time,flags",
+      "-show_entries", "format=duration", "-of", "csv=p=0", caminho], 300_000, ffprobe);
+  } catch (erro) { throw new Error(`ffprobe não leu os keyframes: ${erro instanceof Error ? erro.message : erro}`); }
   const keyframes: number[] = [];
   let duracao = 0;
-  for (const linha of r.stdout.split("\n")) {
+  for (const linha of saida.split("\n")) {
     const [tempo, flags] = linha.split(",");
     if (flags === undefined) { if (tempo && Number.isFinite(Number(tempo))) duracao = Number(tempo); continue; }
     if (flags.includes("K") && Number.isFinite(Number(tempo))) keyframes.push(Math.round(Number(tempo) * 10_000_000));
@@ -147,21 +150,43 @@ export function keyframesFfprobe(caminho: string, ffprobe = "ffprobe"): DadosKey
 /** Matroska pelo índice; se falhar (sem Cues etc.), ffprobe. Resultado em cache por arquivo (tamanho + data). */
 export class CacheKeyframes {
   private dados: Record<string, { assinatura: string; keyframes: DadosKeyframes }> = {};
+  private readonly emAndamento = new Map<string, Promise<DadosKeyframes>>();
   constructor(private readonly arquivo: string) {
     try { this.dados = JSON.parse(fs.readFileSync(arquivo, "utf8")); } catch { this.dados = {}; }
   }
-  obter(caminho: string, assinatura: string): DadosKeyframes {
+  /** Já calculado para este arquivo (tamanho + data)? */
+  temEmCache(caminho: string, assinatura: string): boolean {
+    return this.dados[caminho]?.assinatura === assinatura;
+  }
+  /** Só o índice do Matroska (leitura curta), para o aquecimento: sem Cues, lança (o ffprobe fica para quando abrirem). */
+  async obterSoIndice(caminho: string, assinatura: string): Promise<DadosKeyframes> {
+    if (this.temEmCache(caminho, assinatura)) return this.dados[caminho].keyframes;
+    const keyframes = keyframesMatroska(caminho);
+    if (!keyframes.keyframesTicks.length || !keyframes.duracaoTicks) throw new Error("sem keyframes no índice");
+    this.dados[caminho] = { assinatura, keyframes };
+    await fs.promises.writeFile(this.arquivo, JSON.stringify(this.dados));
+    return keyframes;
+  }
+  async obter(caminho: string, assinatura: string): Promise<DadosKeyframes> {
     const salvo = this.dados[caminho];
     if (salvo?.assinatura === assinatura) return salvo.keyframes;
-    let keyframes: DadosKeyframes;
-    try {
-      keyframes = /\.(mkv|webm|mk3d)$/i.test(caminho) ? keyframesMatroska(caminho) : keyframesFfprobe(caminho);
-      if (!keyframes.keyframesTicks.length || !keyframes.duracaoTicks) throw new Error("sem keyframes no índice");
-    } catch {
-      keyframes = keyframesFfprobe(caminho);
-    }
-    this.dados[caminho] = { assinatura, keyframes };
-    fs.writeFileSync(this.arquivo, JSON.stringify(this.dados));
-    return keyframes;
+    const chave = `${caminho}|${assinatura}`;
+    const andamento = this.emAndamento.get(chave);
+    if (andamento) return andamento;
+    const promessa = (async () => {
+      let keyframes: DadosKeyframes;
+      try {
+        // Matroska: só o índice (Cues), leitura curta; o resto vai pelo ffprobe.
+        keyframes = /\.(mkv|webm|mk3d)$/i.test(caminho) ? keyframesMatroska(caminho) : await keyframesFfprobe(caminho);
+        if (!keyframes.keyframesTicks.length || !keyframes.duracaoTicks) throw new Error("sem keyframes no índice");
+      } catch {
+        keyframes = await keyframesFfprobe(caminho);
+      }
+      this.dados[caminho] = { assinatura, keyframes };
+      await fs.promises.writeFile(this.arquivo, JSON.stringify(this.dados));
+      return keyframes;
+    })();
+    this.emAndamento.set(chave, promessa);
+    try { return await promessa; } finally { this.emAndamento.delete(chave); }
   }
 }

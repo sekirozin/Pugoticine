@@ -114,6 +114,8 @@ export type PlaybackRequest = {
   quality?: "auto" | "original" | "1080" | "720" | "480";
   audioStreamIndex?: number | null;
   subtitleStreamIndex?: number | null;
+  /** Onde o player vai começar (retomar), em segundos: o FFmpeg já começa ali. */
+  posicao?: number | null;
 };
 
 export type PlaybackPlan = {

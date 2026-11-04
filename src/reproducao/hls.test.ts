@@ -43,7 +43,7 @@ function inicioDoSegmento(init: string, segmento: string): { pts: number; duraca
 for (const modo of ["remux", "transcode"] as const) {
   test(`PQA-219: ${modo} — segmentos alinhados à playlist, salto reinicia o FFmpeg no ponto pedido`, async () => {
     const plano: PlaybackPlan = { mode: modo, reason: "teste", targetHeight: null, toneMap: false, audioStreamIndex: info.audioTracks[0].streamIndex, subtitleStreamIndex: null, audioCopy: false };
-    const id = gerenciador.criar("marcos", media, info, plano);
+    const id = await gerenciador.criar("marcos", media, info, plano);
     const sessao = gerenciador.sessao(id, "marcos", media.id)!;
     const playlist = gerenciador.playlist(sessao);
     const duracoes = [...playlist.matchAll(/#EXTINF:([\d.]+),/g)].map(m => Number(m[1]));
@@ -92,7 +92,7 @@ test("PQA-219: remux com quadros B — reiniciar o FFmpeg num segmento anterior 
   const st = fs.statSync(videoGopQuebrado);
   const mediaGop = { ...media, id: "b".repeat(24), absolutePath: videoGopQuebrado, relativePath: "Gop (2021).mkv", fileName: "Gop (2021).mkv", size: st.size, modifiedAt: st.mtime.toISOString() } as MediaItem;
   const plano: PlaybackPlan = { mode: "remux", reason: "teste", targetHeight: null, toneMap: false, audioStreamIndex: infoGop.audioTracks[0].streamIndex, subtitleStreamIndex: null, audioCopy: true };
-  const id = gerenciador.criar("mael", mediaGop, infoGop, plano);
+  const id = await gerenciador.criar("mael", mediaGop, infoGop, plano);
   const sessao = gerenciador.sessao(id, "mael", mediaGop.id)!;
   const duracoes = [...gerenciador.playlist(sessao).matchAll(/#EXTINF:([\d.]+),/g)].map(m => Number(m[1]));
   const inicios = duracoes.map((_, i) => duracoes.slice(0, i).reduce((a, b) => a + b, 0));
@@ -135,7 +135,7 @@ test("PQA-222: se a GPU falha, a sessão passa para software sozinha e o segment
   const quebrada = new GerenciadorHls(path.join(pasta, "hls-gpu"), new CacheKeyframes(path.join(pasta, "keyframes2.json")), "ffmpeg", { dispositivo: path.join(pasta, "gpu-inexistente"), decodifica: ["h264"] });
   try {
     const plano: PlaybackPlan = { mode: "transcode", reason: "teste", targetHeight: null, toneMap: false, audioStreamIndex: info.audioTracks[0].streamIndex, subtitleStreamIndex: null, audioCopy: false };
-    const id = quebrada.criar("ivis", media, info, plano);
+    const id = await quebrada.criar("ivis", media, info, plano);
     const sessao = quebrada.sessao(id, "ivis", media.id)!;
     const s4 = await quebrada.segmento(sessao, 4);
     assert.equal(sessao.semGpu, true, "marcou a sessão como software");
@@ -151,7 +151,7 @@ test("PQA-223: limites de transcodificação — FFmpeg pausado à frente do que
   const limitado = new GerenciadorHls(path.join(pasta, "hls-limite"), new CacheKeyframes(path.join(pasta, "keyframes3.json")), "ffmpeg", () => ({ limitar: true, limitarApos: 12 }));
   try {
     const plano: PlaybackPlan = { mode: "transcode", reason: "teste", targetHeight: null, toneMap: false, audioStreamIndex: info.audioTracks[0].streamIndex, subtitleStreamIndex: null, audioCopy: false };
-    const id = limitado.criar("kenzo", media, info, plano);
+    const id = await limitado.criar("kenzo", media, info, plano);
     const sessao = limitado.sessao(id, "kenzo", media.id)!;
     await limitado.segmento(sessao, 0);
     const pid = sessao.trabalho!.processo.pid!;
@@ -159,7 +159,8 @@ test("PQA-223: limites de transcodificação — FFmpeg pausado à frente do que
     assert.equal(sessao.trabalho!.pausado, true, "pausou");
     assert.equal(estadoDoProcesso(pid), "T", "processo parado (SIGSTOP)");
     const parado = sessao.trabalho!.proximo;
-    assert.ok(parado * SEGUNDOS_POR_SEGMENTO <= 12 + 3 * SEGUNDOS_POR_SEGMENTO && parado < 30, `parou perto do limite (próximo ${parado})`);
+    // O FFmpeg começa já na criação da sessão (PQA-285) e o limitador confere a cada 2 s: até 4 segmentos além do limite.
+    assert.ok(parado * SEGUNDOS_POR_SEGMENTO <= 12 + 4 * SEGUNDOS_POR_SEGMENTO && parado < 30, `parou perto do limite (próximo ${parado})`);
     await new Promise(r => setTimeout(r, 2500));
     for (let n = sessao.trabalho!.proximo; fs.existsSync(path.join(sessao.pasta, `${n}.mp4`)); n++) assert.fail("continuou convertendo pausado");
     // A pessoa avança: o pedido retoma o FFmpeg e ele volta a produzir.
@@ -175,7 +176,7 @@ test("PQA-223: remover segmentos — os que ficaram para trás são apagados e v
   const removendo = new GerenciadorHls(path.join(pasta, "hls-remove"), new CacheKeyframes(path.join(pasta, "keyframes4.json")), "ffmpeg", () => ({ removerSegmentos: true, manterSegundos: 12 }));
   try {
     const plano: PlaybackPlan = { mode: "remux", reason: "teste", targetHeight: null, toneMap: false, audioStreamIndex: info.audioTracks[0].streamIndex, subtitleStreamIndex: null, audioCopy: false };
-    const id = removendo.criar("lee", media, info, plano);
+    const id = await removendo.criar("lee", media, info, plano);
     const sessao = removendo.sessao(id, "lee", media.id)!;
     // Pedidos em ordem, como quem assiste (pular mais de 24 s reiniciaria o FFmpeg e o meio nem existiria).
     let s10 = "";
@@ -201,4 +202,24 @@ test("PQA-223: opções do Painel na linha de comando (preset, CRF, threads, fil
   assert.match(linha, /-max_muxing_queue_size 4096 /);
   assert.match(linha, /-ac 2 -b:a 192k -af volume=1\.5/);
   assert.match(argumentosFfmpeg({ entrada: video, info, plano, copiaVideo: false, segmento: 0, inicioSegundos: 0, pasta, preset: "auto", ffmpegThreads: -1 }).join(" "), /-threads 0 .*-preset veryfast -crf 23/);
+});
+
+test("PQA-285: retomar no meio — o FFmpeg já começa no ponto de retomada e o init/segmento não o reiniciam", async () => {
+  const g = new GerenciadorHls(path.join(pasta, "hls-retomar"), new CacheKeyframes(path.join(pasta, "keyframes5.json")));
+  try {
+    const plano: PlaybackPlan = { mode: "transcode", reason: "teste", targetHeight: null, toneMap: false, audioStreamIndex: info.audioTracks[0].streamIndex, subtitleStreamIndex: null, audioCopy: false };
+    const id = await g.criar("nina", media, info, plano, 31);
+    const sessao = g.sessao(id, "nina", media.id)!;
+    await sessao.fila;
+    assert.equal(sessao.trabalho?.inicio, 5, "31 s cai no segmento 5 (6 s cada): o FFmpeg já começou ali, antes de qualquer pedido");
+    const pid = sessao.trabalho!.processo.pid;
+    const init = await g.segmento(sessao, -1);
+    const s5 = await g.segmento(sessao, 5);
+    assert.equal(sessao.trabalho!.processo.pid, pid, "init e segmento 5 vieram do mesmo FFmpeg (sem reinício)");
+    assert.ok(Math.abs(inicioDoSegmento(init, s5).pts - 30) < 0.05, "segmento 5 começa em 30 s");
+    const zero = await g.criar("nina", media, info, plano);
+    const s0 = g.sessao(zero, "nina", media.id)!;
+    await s0.fila;
+    assert.equal(s0.trabalho?.inicio, 0, "sem posição: começa no início");
+  } finally { g.parar(); }
 });

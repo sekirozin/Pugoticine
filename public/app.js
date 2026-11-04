@@ -40,15 +40,21 @@ function login(loginUrl = "https://pugotilab.com/auth") {
   location.assign(`${loginUrl}?return=${encodeURIComponent(location.href)}`);
 }
 
-async function api(url, options = {}) {
+// `semLogin`: pedidos de fundo (salvar progresso) nunca levam ao login no meio do filme; o próximo pedido da tela leva.
+async function api(url, { semLogin = false, ...options } = {}) {
   const response = await fetch(url, {
     ...options,
     headers: { "content-type": "application/json", ...(options.headers || {}) }
   });
   if (response.status === 401) {
     const dados = await response.json().catch(() => ({}));
-    login(dados.loginUrl || undefined);
+    if (!semLogin) login(dados.loginUrl || undefined);
     throw new Error("Login necessário");
+  }
+  // 503: a conta Pugotilab não respondeu (servidor sobrecarregado). Não é falta de login: avisa e segue.
+  if (response.status === 503) {
+    const dados = await response.json().catch(() => ({}));
+    throw new Error(dados.error || "Servidor ocupado. Tente de novo em instantes.");
   }
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Erro inesperado");
@@ -275,6 +281,7 @@ async function saveProgress() {
   if (!Number.isFinite(duration) || duration <= 0) return;
   try {
     const result = await api("/api/progress", {
+      semLogin: true,
       method: "POST",
       body: JSON.stringify({ mediaId: state.active.id, position: player.currentTime, duration })
     });
@@ -307,14 +314,19 @@ function attachSource(url, mode) {
   state.usingHls = mode !== "direct";
   if (state.usingHls && window.Hls?.isSupported()) {
     // Mesma configuração e recuperação de erros do jellyfin-web (htmlVideoPlayer + htmlMediaHelper).
-    state.hls = new Hls({ startPosition: resumePosition(), manifestLoadingTimeOut: 20000, maxBufferLength: 30, maxMaxBufferLength: 30 });
+    // Primeiro byte de um trecho pode passar de 10 s (padrão do hls.js) enquanto o Zima converte: espera até 30 s
+    // em vez de cancelar e pedir de novo.
+    const espera = { default: { maxTimeToFirstByteMs: 30000, maxLoadTimeMs: 120000, timeoutRetry: { maxNumRetry: 2, retryDelayMs: 0, maxRetryDelayMs: 0 }, errorRetry: { maxNumRetry: 6, retryDelayMs: 1000, maxRetryDelayMs: 8000 } } };
+    state.hls = new Hls({ startPosition: resumePosition(), manifestLoadingTimeOut: 20000, maxBufferLength: 30, maxMaxBufferLength: 30, fragLoadPolicy: espera });
     state.hls.loadSource(url);
     state.hls.attachMedia(player);
     state.hls.on(Hls.Events.MANIFEST_PARSED, startPlayback);
     let recuperacoesDeMidia = 0;
     state.hls.on(Hls.Events.ERROR, (_event, data) => {
       console.error(`HLS: ${data.type} ${data.details || ""}${data.fatal ? " (fatal)" : ""}${data.error ? ` — ${data.error.message || data.error}` : ""}`);
-      if (data.type === Hls.ErrorTypes.NETWORK_ERROR && data.response?.code >= 400) { fallbackUniversal(`servidor respondeu ${data.response.code}`); return; }
+      // 401/503 (sessão/servidor ocupado) e 5xx passageiros: o hls.js tenta o mesmo trecho de novo; só 4xx de verdade
+      // (trecho que não existe, sessão de vídeo expirada) mudam para o modo universal.
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR && data.response?.code >= 400 && data.response.code < 500 && data.response.code !== 401) { fallbackUniversal(`servidor respondeu ${data.response.code}`); return; }
       if (!data.fatal) return;
       if (data.type === Hls.ErrorTypes.NETWORK_ERROR) { state.hls.startLoad(); return; }
       if (data.type === Hls.ErrorTypes.MEDIA_ERROR && recuperacoesDeMidia < 2) {
@@ -341,7 +353,9 @@ async function requestPlayback(forceUniversal = false) {
     capabilities: browserCapabilities(forceUniversal),
     quality: $("#player-quality").value,
     audioStreamIndex: Number.isFinite(audioValue) ? audioValue : null,
-    subtitleStreamIndex: selectedSubtitleRequest(state.technical)
+    subtitleStreamIndex: selectedSubtitleRequest(state.technical),
+    // O servidor já começa a converter daqui (o hls.js começa no mesmo ponto: startPosition).
+    posicao: Math.max(0, resumePosition())
   };
   const result = await api(`/api/media/${media.id}/playback`, { method: "POST", body: JSON.stringify(request) });
   state.technical = result.technical;

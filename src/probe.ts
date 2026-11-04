@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import type { MediaItem, MediaTechnicalInfo } from "./types.js";
@@ -70,8 +70,28 @@ export function parseProbeOutput(output: ProbeOutput): MediaTechnicalInfo {
   };
 }
 
+/** Roda o ffprobe sem bloquear o servidor (antes era spawnSync: o Node inteiro parava até 30 s, inclusive os trechos
+ *  de vídeo de quem já estava assistindo e as checagens de sessão, que estouravam o tempo e viravam "deslogado"). */
+export function rodarFfprobe(args: string[], tempoLimiteMs: number, ffprobe = "ffprobe"): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const processo = spawn(ffprobe, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const saida: Buffer[] = [];
+    let erro = "";
+    const limite = setTimeout(() => processo.kill("SIGKILL"), tempoLimiteMs);
+    processo.stdout.on("data", (parte: Buffer) => saida.push(parte));
+    processo.stderr.on("data", (parte: Buffer) => { if (erro.length < 2000) erro += String(parte); });
+    processo.once("error", (e) => { clearTimeout(limite); reject(e); });
+    processo.once("close", (codigo) => {
+      clearTimeout(limite);
+      if (codigo === 0) resolve(Buffer.concat(saida).toString("utf8"));
+      else reject(new Error(`ffprobe terminou com ${codigo ?? "sinal"}: ${erro.trim().slice(0, 200)}`));
+    });
+  });
+}
+
 export class ProbeService {
   private cache: ProbeCache;
+  private readonly emAndamento = new Map<string, Promise<MediaTechnicalInfo>>();
   constructor(private readonly cacheFile: string) {
     try {
       this.cache = JSON.parse(fs.readFileSync(cacheFile, "utf8")) as ProbeCache;
@@ -80,18 +100,38 @@ export class ProbeService {
       this.cache = { version: 1, records: {} };
     }
   }
-  analyze(media: MediaItem): MediaTechnicalInfo {
-    const signature = `${media.size}:${media.modifiedAt}`;
+  /** Informação técnica já analisada (sem rodar o ffprobe); null se o arquivo ainda não foi analisado. */
+  emCache(media: MediaItem): MediaTechnicalInfo | null {
     const cached = this.cache.records[media.relativePath];
-    if (cached?.signature === signature) return cached.info;
-    const result = spawnSync("ffprobe", [
-      "-v", "error", "-show_format", "-show_streams", "-of", "json", media.absolutePath
-    ], { encoding: "utf8", maxBuffer: 8 * 1024 * 1024, timeout: 30_000 });
-    if (result.status !== 0) throw new Error(`Não foi possível analisar ${media.title}.`);
-    const info = parseProbeOutput(JSON.parse(result.stdout) as ProbeOutput);
-    this.cache.records[media.relativePath] = { signature, info };
-    fs.mkdirSync(path.dirname(this.cacheFile), { recursive: true });
-    fs.writeFileSync(this.cacheFile, JSON.stringify(this.cache));
-    return info;
+    return cached?.signature === `${media.size}:${media.modifiedAt}` ? cached.info : null;
+  }
+  async analyze(media: MediaItem): Promise<MediaTechnicalInfo> {
+    const pronto = this.emCache(media);
+    if (pronto) return pronto;
+    const chave = `${media.relativePath}|${media.size}:${media.modifiedAt}`;
+    const andamento = this.emAndamento.get(chave);
+    if (andamento) return andamento;
+    const promessa = (async () => {
+      let saida: string;
+      try { saida = await rodarFfprobe(["-v", "error", "-show_format", "-show_streams", "-of", "json", media.absolutePath], 30_000); }
+      catch { throw new Error(`Não foi possível analisar ${media.title}.`); }
+      const info = parseProbeOutput(JSON.parse(saida) as ProbeOutput);
+      this.cache.records[media.relativePath] = { signature: `${media.size}:${media.modifiedAt}`, info };
+      await fs.promises.mkdir(path.dirname(this.cacheFile), { recursive: true });
+      await fs.promises.writeFile(this.cacheFile, JSON.stringify(this.cache));
+      return info;
+    })();
+    this.emAndamento.set(chave, promessa);
+    try { return await promessa; } finally { this.emAndamento.delete(chave); }
+  }
+  /** Analisa em segundo plano, um por vez, o que ainda não está no cache (arquivos novos depois da varredura): assim a
+   *  primeira vez que alguém abre o título não espera o ffprobe. Devolve quantos analisou. */
+  async aquecer(midias: MediaItem[]): Promise<number> {
+    let analisados = 0;
+    for (const media of midias) {
+      if (this.emCache(media)) continue;
+      try { await this.analyze(media); analisados++; } catch { /* arquivo com problema: fica para quando abrirem */ }
+    }
+    return analisados;
   }
 }

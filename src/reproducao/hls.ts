@@ -164,18 +164,34 @@ export class GerenciadorHls {
     t.pausado = false;
   }
 
-  criar(usuario: string, media: MediaItem, info: MediaTechnicalInfo, plano: PlaybackPlan): string {
+  /** `inicioSegundos`: onde o player vai começar. O FFmpeg já começa nesse segmento, antes de o player pedir a playlist
+   *  (antes, o pedido do init começava a converter do segmento 0 e o pedido seguinte, no ponto de retomada, reiniciava
+   *  o FFmpeg: conversão jogada fora e uma ida e volta a mais até o primeiro quadro). */
+  async criar(usuario: string, media: MediaItem, info: MediaTechnicalInfo, plano: PlaybackPlan, inicioSegundos = 0): Promise<string> {
     // Uma sessão por pessoa e título: abrir de novo encerra a anterior (e o FFmpeg dela).
     for (const s of this.sessoes.values()) if (s.usuario === usuario && s.media.id === media.id) this.encerrar(s.id);
     const copiaVideo = plano.mode === "remux";
     let duracoes: number[];
-    if (copiaVideo) duracoes = segmentosPorKeyframes(this.keyframes.obter(media.absolutePath, `${media.size}:${media.modifiedAt}`), SEGUNDOS_POR_SEGMENTO * 1000);
+    if (copiaVideo) duracoes = segmentosPorKeyframes(await this.keyframes.obter(media.absolutePath, `${media.size}:${media.modifiedAt}`), SEGUNDOS_POR_SEGMENTO * 1000);
     else duracoes = segmentosIguais(SEGUNDOS_POR_SEGMENTO * 1000, Math.round(info.duration * 10_000_000));
     const id = crypto.randomUUID();
     const pasta = path.join(this.raiz, id);
     fs.mkdirSync(pasta, { recursive: true });
     this.sessoes.set(id, { id, usuario, media, info, plano, copiaVideo, duracoes, inicios: iniciosDosSegmentos(duracoes), pasta, trabalho: null, ultimoAcesso: Date.now(), fila: Promise.resolve(), semGpu: false, ultimoPedido: 0 });
+    const s = this.sessoes.get(id)!;
+    const numero = this.segmentoDe(s, inicioSegundos);
+    s.ultimoPedido = numero;
+    const decisao = s.fila.then(() => this.garantirTrabalho(s, numero, false));
+    s.fila = decisao.catch((erro) => console.error(`Falha ao iniciar a conversão de ${media.title}:`, erro));
     return id;
+  }
+
+  /** Segmento que contém o instante `segundos` (o mesmo que o hls.js escolhe com startPosition). */
+  segmentoDe(s: Sessao, segundos: number): number {
+    if (!(segundos > 0)) return 0;
+    let n = 0;
+    while (n + 1 < s.inicios.length && s.inicios[n + 1] <= segundos) n++;
+    return n;
   }
 
   sessao(id: string, usuario: string, mediaId: string): Sessao | null {

@@ -17,13 +17,13 @@ function gerar(nome: string, args: string[]): string {
   return arquivo;
 }
 
-test("PQA-219: keyframes do índice Matroska = ffprobe (GOP fixo e GOP variável)", () => {
+test("PQA-219: keyframes do índice Matroska = ffprobe (GOP fixo e GOP variável)", async () => {
   for (const [nome, args] of [
     ["gop-fixo.mkv", ["-c:v", "libx264", "-g", "48", "-c:a", "aac"]],
     ["gop-variavel.mkv", ["-c:v", "libx264", "-g", "250", "-keyint_min", "10", "-sc_threshold", "40", "-c:a", "aac"]]
   ] as const) {
     const arquivo = gerar(nome, [...args]);
-    const indice = keyframesMatroska(arquivo), sondado = keyframesFfprobe(arquivo);
+    const indice = keyframesMatroska(arquivo), sondado = await keyframesFfprobe(arquivo);
     assert.ok(indice.keyframesTicks.length >= 1, nome);
     assert.deepEqual(indice.keyframesTicks.map(t => Math.round(t / 10_000)), sondado.keyframesTicks.map(t => Math.round(t / 10_000)), `${nome}: mesmos keyframes (ms)`);
     assert.ok(Math.abs(indice.duracaoTicks - sondado.duracaoTicks) < 1_000_000, `${nome}: duração ${indice.duracaoTicks} x ${sondado.duracaoTicks}`);

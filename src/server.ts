@@ -3,7 +3,7 @@ import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
-import { getProfile } from "./auth.js";
+import { AuthIndisponivel, getProfile } from "./auth.js";
 import { Catalog } from "./catalog.js";
 import { config } from "./config.js";
 import { streamFile, subtitleToVtt } from "./media.js";
@@ -123,7 +123,7 @@ function sincronizarTmdb(): void {
 }
 const probe = new ProbeService(path.join(config.dataDir, "probe-cache.json"));
 // Pôsteres e fundos em WebP no tamanho certo (Radarr ou um quadro do próprio vídeo), em cache.
-const imagens = new Imagens(path.join(config.dataDir, "imagens"), config.ffmpegPath, (media) => { try { return probe.analyze(media).duration; } catch { return 0; } });
+const imagens = new Imagens(path.join(config.dataDir, "imagens"), config.ffmpegPath, (media) => probe.emCache(media)?.duration ?? 0);
 const transcoder = new Transcoder(path.join(config.dataDir, "transcodes"));
 fs.mkdirSync(config.dataDir, { recursive: true });
 // Aceleração por GPU (VAAPI), como a do Jellyfin: cada dispositivo é testado uma vez; sem GPU ou se o teste falhar,
@@ -158,7 +158,8 @@ function opcoesConversao(): Partial<OpcoesConversao> {
     removerSegmentos: t.EnableSegmentDeletion === true, manterSegundos: Number(t.SegmentKeepSeconds ?? 720)
   };
 }
-const hls = new GerenciadorHls(path.join(config.dataDir, "hls"), new CacheKeyframes(path.join(config.dataDir, "keyframes.json")), config.ffmpegPath, opcoesConversao);
+const keyframes = new CacheKeyframes(path.join(config.dataDir, "keyframes.json"));
+const hls = new GerenciadorHls(path.join(config.dataDir, "hls"), keyframes, config.ffmpegPath, opcoesConversao);
 const salas = new RotasSalas(new GerenciadorSalas(path.join(config.dataDir, "salas.db")), (id) => Boolean(catalog.get(id)), json, body);
 let lastScanAt = "";
 const versaoApp = JSON.parse(fs.readFileSync(path.join(config.publicDir, "..", "package.json"), "utf8")).version as string;
@@ -171,11 +172,35 @@ const painel = new RotasPainel({
 });
 
 function scan(): void {
+  const inicio = Date.now();
   const items = catalog.scan();
   lastScanAt = new Date().toISOString();
-  console.log(`Catálogo atualizado: ${items.length} mídia(s).`);
+  const duracao = Date.now() - inicio;
+  console.log(`Catálogo atualizado: ${items.length} mídia(s)${duracao > 1000 ? ` em ${duracao} ms` : ""}.`);
   sincronizarTmdb();
   sincronizarBazarr();
+  aquecerReproducao();
+}
+
+/** Depois de cada varredura, em segundo plano e um arquivo por vez: análise técnica (ffprobe) e índice de keyframes
+ *  dos Matroska (só os Cues, leitura curta) dos títulos novos. Assim abrir um título novo não espera nenhum dos dois. */
+let aquecendo = false;
+async function aquecerReproducao(): Promise<void> {
+  if (aquecendo) return;
+  aquecendo = true;
+  try {
+    const midias = catalog.list();
+    const analisados = await probe.aquecer(midias);
+    let indices = 0;
+    for (const m of midias) {
+      const assinatura = `${m.size}:${m.modifiedAt}`;
+      if (!/\.(mkv|webm|mk3d)$/i.test(m.absolutePath) || keyframes.temEmCache(m.absolutePath, assinatura)) continue;
+      try { await keyframes.obterSoIndice(m.absolutePath, assinatura); indices++; } catch { /* sem Cues: calcula quando abrirem */ }
+      await new Promise((r) => setImmediate(r));
+    }
+    if (analisados || indices) console.log(`Reprodução preparada: ${analisados} análise(s) e ${indices} índice(s) de keyframes.`);
+  } catch (erro) { console.error("Falha ao preparar a reprodução:", erro); }
+  finally { aquecendo = false; }
 }
 
 function json(res: ServerResponse, status: number, body: unknown): void {
@@ -191,7 +216,14 @@ async function body<T>(req: IncomingMessage): Promise<T> {
 
 async function authenticated(req: IncomingMessage, res: ServerResponse): Promise<PugotiProfile | null> {
   // Sem sessão do Pugotilab, vale uma chave do Painel › Chaves da API (acesso de administrador).
-  const profile = await getProfile(req) ?? painel.perfilPorChave(req);
+  let profile: PugotiProfile | null;
+  try { profile = await getProfile(req) ?? painel.perfilPorChave(req); }
+  catch (erro) {
+    // Auth fora do ar sem sessão recente para usar: 503 (o app avisa e tenta de novo; não manda ao login).
+    if (!(erro instanceof AuthIndisponivel)) throw erro;
+    profile = painel.perfilPorChave(req);
+    if (!profile) { json(res, 503, { error: erro.message, indisponivel: true }); return null; }
+  }
   if (!profile) json(res, 401, { error: "Entre com sua conta Pugotilab.", loginUrl: config.pugotilabLoginUrl });
   return profile;
 }
@@ -281,14 +313,15 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<voi
     if (!media) { json(res, 404, { error: "Mídia não encontrada." }); return; }
     painel.registrarReproducao(profile, media);
     const request = await body<PlaybackRequest>(req);
-    const technical = probe.analyze(media);
+    const technical = await probe.analyze(media);
     const plan = createPlaybackPlan(media, technical, request);
     if (plan.mode === "direct") {
       json(res, 200, { plan, technical, url: `/api/media/${media.id}/stream` });
       return;
     }
     // HLS sob demanda (como o Jellyfin): playlist completa, segmentos gerados quando pedidos.
-    const sessao = hls.criar(profile.username, media, technical, plan);
+    const posicao = Number(request.posicao);
+    const sessao = await hls.criar(profile.username, media, technical, plan, Number.isFinite(posicao) && posicao > 0 && posicao < technical.duration ? posicao : 0);
     json(res, 200, { plan, technical, url: `/api/media/${media.id}/hls/${sessao}/main.m3u8` });
     return;
   }
@@ -312,7 +345,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<voi
   if (embeddedSubtitleMatch && req.method === "GET") {
     const media = visivel(profile, catalog.get(embeddedSubtitleMatch[1]));
     if (!media) { json(res, 404, { error: "Mídia não encontrada." }); return; }
-    const technical = probe.analyze(media);
+    const technical = await probe.analyze(media);
     const streamIndex = Number(embeddedSubtitleMatch[2]);
     const subtitle = technical.subtitleTracks.find((track) => track.streamIndex === streamIndex && track.kind === "text");
     if (!subtitle) { json(res, 404, { error: "Legenda interna não encontrada ou incompatível." }); return; }
