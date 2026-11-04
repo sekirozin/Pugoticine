@@ -10,7 +10,7 @@ const frontend = process.env.PUGOTICINE_FRONTEND;
 const fotos = process.env.PUGOTICINE_CAPTURAS;
 const navegador = await pw.chromium.launch({ executablePath: "/usr/bin/chromium" });
 const erros = [];
-const cores = { "1": ["rgb(0, 0, 0)", "rgb(38, 61, 187)"], "2": ["rgb(16, 16, 16)", "rgb(200, 255, 0)"], "3": ["rgb(101, 20, 36)", "rgb(255, 88, 37)"], "4": ["rgb(14, 53, 157)", "rgb(255, 96, 106)"] };
+const cores = { "1": ["rgb(16, 16, 16)", "rgb(38, 61, 187)"], "2": ["rgb(16, 16, 16)", "rgb(200, 255, 0)"], "3": ["rgb(16, 16, 16)", "rgb(255, 88, 37)"], "4": ["rgb(16, 16, 16)", "rgb(255, 96, 106)"] };
 async function contexto(opcoes = {}) {
   const c = await navegador.newContext(opcoes);
   await c.addCookies([{ name: "pugotilab_session", value: "dev-sekiro", url: BASE }]);

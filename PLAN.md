@@ -37,3 +37,11 @@ Codex, 2026-11-03: painel de 22 telas integrado, testado com player/salas e publ
 
 ### Último handoff deste incremento
 Codex (agente navegação), 2026-11-04: quatro temas e seletor móvel validados; aguarda integração e deploy local pelo agente principal.
+
+## Ajuste de temas — 04/11/2026
+
+Decisão do usuário: os quatro temas compartilham fundo #101010 no modo escuro; modo claro usa fundo #f5f5f5. Cada tema conserva sua cor de destaque, independentemente do modo. Os dois seletores no Perfil persistem por navegador e sincronizam abas. PQA-272 cobre as oito combinações; PQA-270/271 foram atualizados para o fundo comum. Próximo: publicar no Docker local e conferir; Zima segue fora desta operação.
+
+## Último handoff atualizado
+
+Codex, 2026-11-04: quatro paletas separadas da aparência clara/escura; oito combinações testadas; próximo publicar no Docker local.
