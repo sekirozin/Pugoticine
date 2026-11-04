@@ -13,11 +13,13 @@ function getCookie(req: IncomingMessage, name: string): string | null {
 type Buscar = (url: string, init: { headers: Record<string, string>; signal: AbortSignal }) => Promise<{ ok: boolean; json(): Promise<unknown> }>;
 
 /**
- * Lê o perfil no Pugotilab (auth) com cache curto por sessão: cada tela, imagem e trecho de vídeo pedia o perfil de
- * novo ao auth. Só respostas válidas entram no cache; sessão recusada é consultada de novo na próxima vez.
+ * Lê o perfil no Pugotilab (auth) com cache curtíssimo por sessão: cada tela, imagem e trecho de vídeo pedia o perfil
+ * de novo ao auth. Usa /auth/api/session (validação leve, sem cache no auth); 3 s de cache juntam as rajadas de pedidos
+ * (trechos HLS) e mantêm o "Sair" e o "Desconectar aparelho" valendo praticamente na hora. Só respostas válidas entram
+ * no cache; sessão recusada é consultada de novo na próxima vez.
  */
 export function criarLeitorDePerfil(opcoes: { url: string; validadeMs?: number; maximo?: number; buscar?: Buscar; agora?: () => number }) {
-  const validadeMs = opcoes.validadeMs ?? 30_000;
+  const validadeMs = opcoes.validadeMs ?? 3_000;
   const maximo = opcoes.maximo ?? 500;
   const buscar: Buscar = opcoes.buscar ?? ((url, init) => fetch(url, init));
   const agora = opcoes.agora ?? Date.now;
@@ -50,7 +52,9 @@ export function criarLeitorDePerfil(opcoes: { url: string; validadeMs?: number; 
   };
 }
 
-const lerPerfil = criarLeitorDePerfil({ url: config.pugotilabProfileUrl });
+// /auth/api/session: só o necessário para a sessão (o /profile traz favoritos do Pugotiread e outros dados).
+const urlSessao = process.env.PUGOTILAB_SESSION_URL ?? config.pugotilabProfileUrl.replace(/\/profile$/, "/session");
+const lerPerfil = criarLeitorDePerfil({ url: urlSessao });
 
 export async function getProfile(req: IncomingMessage): Promise<PugotiProfile | null> {
   const token = getCookie(req, "pugotilab_session");

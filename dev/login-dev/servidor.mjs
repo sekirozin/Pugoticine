@@ -12,7 +12,7 @@ const cookie = (req, nome) => (req.headers.cookie ?? "").split(";").map(p => p.t
 const escapar = (t) => String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 http.createServer((req, res) => {
   const url = new URL(req.url, "http://login-dev");
-  if (url.pathname === "/auth/api/profile") {
+  if (url.pathname === "/auth/api/profile" || url.pathname === "/auth/api/session") {
     const usuario = USUARIOS[decodeURIComponent(cookie(req, "pugotilab_session") ?? "").replace(/^dev-/, "")];
     res.writeHead(usuario ? 200 : 401, { "Content-Type": "application/json" });
     return res.end(JSON.stringify(usuario ? { profile: usuario } : { error: "Sem sessão." }));
