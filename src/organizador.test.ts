@@ -41,11 +41,13 @@ function servidor(responder: (r: Req, res: http.ServerResponse) => unknown) {
 function mover(arquivos: { path: string }[], destino: string) {
   for (const a of arquivos) { fs.mkdirSync(destino, { recursive: true }); fs.renameSync(a.path, path.join(destino, path.basename(a.path))); }
 }
-const radarr = servidor((r) => {
+const radarr = servidor((r, res) => {
   if (r.caminho === "/api/v3/movie" && r.metodo === "GET") return filmes;
   if (r.caminho.startsWith("/api/v3/movie/lookup/tmdb")) return { title: "Resident Evil", year: 2026, tmdbId: 999, images: [] };
   if (r.caminho === "/api/v3/movie" && r.metodo === "POST") { const f = { ...r.corpo, id: 2 }; filmes.push(f); return f; }
   if (r.caminho.startsWith("/api/v3/manualimport")) {
+    // Como o Radarr 6 real: com movieId de filme sem pasta na biblioteca, erro 500.
+    if (/movieId=/.test(r.caminho)) { res.writeHead(500); res.end(JSON.stringify({ message: "Could not find a part of the path" })); return undefined; }
     const pasta = decodeURIComponent(r.caminho.match(/folder=([^&]+)/)![1]);
     const lista = fs.statSync(pasta).isFile() ? [pasta] : fs.readdirSync(pasta).map((n) => path.join(pasta, n)).filter((f) => f.endsWith(".mkv"));
     return lista.map((p) => ({ path: p, quality: { q: 1 }, languages: [{ id: 1 }], releaseGroup: "G", folderName: path.basename(pasta) }));
@@ -54,11 +56,13 @@ const radarr = servidor((r) => {
   if (r.caminho === "/api/v3/command/7") return { status: "completed" };
   return { erro: r.caminho };
 });
-const sonarr = servidor((r) => {
+const sonarr = servidor((r, res) => {
   if (r.caminho === "/api/v3/series" && r.metodo === "GET") return series;
   if (r.caminho.startsWith("/api/v3/series/lookup")) return [{ title: "The Exiled Heavy Knight", tvdbId: 444, seasons: [] }];
   if (r.caminho === "/api/v3/series" && r.metodo === "POST") { const s = { ...r.corpo, id: 3 }; series.push(s); return s; }
   if (r.caminho.startsWith("/api/v3/manualimport")) {
+    // Série recém-cadastrada sem pasta: com seriesId falha (cai na tentativa sem ID).
+    if (/seriesId=3/.test(r.caminho)) { res.writeHead(500); res.end("{}"); return undefined; }
     const pasta = decodeURIComponent(r.caminho.match(/folder=([^&]+)/)![1]);
     const lista = fs.statSync(pasta).isFile() ? [pasta] : fs.readdirSync(pasta).map((n) => path.join(pasta, n)).filter((f) => f.endsWith(".mkv"));
     // O episódio "sem-marca" não é reconhecido (fica pendente).

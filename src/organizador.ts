@@ -158,7 +158,9 @@ export class Organizador {
       this.log(`${filme.title} (${filme.year}) cadastrado no Radarr`, "sem monitorar e sem buscar", "Information");
     }
     type Item = { path: string; quality: unknown; languages: unknown; releaseGroup?: string; folderName?: string; rejections?: { type: string; reason: string }[] };
-    const itens = await this.arr<Item[]>("radarr", "GET", `/manualimport?folder=${encodeURIComponent(pasta)}&movieId=${filme.id}&filterExistingFiles=false`);
+    // Sem movieId: o Radarr 6 tenta ler a pasta do filme na biblioteca (que ainda não existe) e responde 500.
+    // O filme certo vai no pedido de importação, abaixo.
+    const itens = await this.arr<Item[]>("radarr", "GET", `/manualimport?folder=${encodeURIComponent(pasta)}&filterExistingFiles=false`);
     const arquivos = itens.filter((i) => videos.includes(path.resolve(i.path)) && !i.rejections?.some((r) => /sample/i.test(r.reason)))
       .map((i) => ({ path: i.path, movieId: filme!.id, quality: i.quality, languages: i.languages, releaseGroup: i.releaseGroup, folderName: i.folderName }));
     if (!arquivos.length) throw new Error("o Radarr não reconheceu nenhum vídeo para importar");
@@ -192,7 +194,10 @@ export class Organizador {
       this.log(`${serie.title} cadastrado no Sonarr (${anime ? "Animes" : "Séries"})`, "sem monitorar e sem buscar", "Information");
     }
     type Item = { path: string; seasonNumber?: number; episodes?: { id: number }[]; quality: unknown; languages: unknown; releaseGroup?: string; folderName?: string };
-    const itens = await this.arr<Item[]>("sonarr", "GET", `/manualimport?folder=${encodeURIComponent(pasta)}&seriesId=${serie.id}&filterExistingFiles=false`);
+    // Com seriesId o Sonarr usa a série cadastrada para achar os episódios; se a pasta da série ainda não existe e ele
+    // falhar (como o Radarr 6), tenta sem o ID (ele reconhece a série pelo nome, já cadastrada).
+    const itens = await this.arr<Item[]>("sonarr", "GET", `/manualimport?folder=${encodeURIComponent(pasta)}&seriesId=${serie.id}&filterExistingFiles=false`)
+      .catch(() => this.arr<Item[]>("sonarr", "GET", `/manualimport?folder=${encodeURIComponent(pasta)}&filterExistingFiles=false`));
     const arquivos = itens.filter((i) => videos.includes(path.resolve(i.path)) && i.episodes?.length)
       .map((i) => ({ path: i.path, seriesId: serie!.id, seasonNumber: i.seasonNumber, episodeIds: i.episodes!.map((e) => e.id), quality: i.quality, languages: i.languages, releaseGroup: i.releaseGroup, folderName: i.folderName }));
     if (!arquivos.length) throw new Error("o Sonarr não reconheceu nenhum episódio para importar");
