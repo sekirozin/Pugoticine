@@ -61,6 +61,9 @@ function montarEntradas(media) {
     s.episodios.sort(ordemEpisodio);
     s.temporadas = [...new Set(s.episodios.map((e) => e.serie.temporada))].sort((a, b) => a - b);
     s.imagens = s.episodios[0].imagens;
+    // Metadados da série (TMDB): sinopse, gêneros, ano, classificação — iguais em todos os episódios.
+    const m = s.episodios[0].metadata;
+    if (m) { s.metadata = m; s.year = m.year ?? null; }
   }
   return { entradas, series };
 }
@@ -105,11 +108,11 @@ function cartao(item, formato = "poster") {
       : andamento ? restante(p) : [item.year, duracaoTexto(item.metadata?.runtime)].filter(Boolean).join(" · ");
   // Legenda abaixo da capa, como no Jellyfin: nome da obra e ano de lançamento (episódio: série e "T1E04 · nome").
   const legendaNome = item.serie ? item.serie.nome : item.title;
-  const legendaLinha = item.ehSerie ? `${item.episodios.length} ${item.episodios.length === 1 ? "episódio" : "episódios"}`
+  const legendaLinha = item.ehSerie ? (item.year ? String(item.year) : `${item.episodios.length} ${item.episodios.length === 1 ? "episódio" : "episódios"}`)
     : item.serie ? `${rotuloEpisodio(item)} · ${nomeEpisodio(item)}` : String(item.year ?? "");
   return `<article class="titulo titulo-${formato}" role="listitem">
     <button type="button" class="titulo-capa" data-detalhes="${detalhesId}" aria-label="${escapar(nome)}: mais informações">
-      ${largo ? imagem(item, "fundo", [780, 1280], "(max-width: 700px) 70vw, 340px", "titulo-img") : imagem(item, "poster", [185, 342, 500], "(max-width: 700px) 40vw, 180px", "titulo-img")}
+      ${largo ? imagem(item, item.serie ? "cena" : "fundo", item.serie ? [780, 1280] : [780, 1280], "(max-width: 700px) 70vw, 340px", "titulo-img") : imagem(item, "poster", [185, 342, 500], "(max-width: 700px) 40vw, 180px", "titulo-img")}
       <span class="titulo-nome-reserva">${escapar(item.title)}</span>
       ${item.ehSerie ? `<span class="titulo-selo">${item.episodios.length}</span>` : ""}
       ${andamento ? `<span class="titulo-progresso"><span style="width:${percentual(alvo).toFixed(1)}%"></span></span>` : ""}
@@ -160,7 +163,7 @@ function destaque(item) {
     <div class="destaque-sombra"></div>
     <div class="destaque-info">
       <h1>${escapar(item.title)}</h1>
-      <p class="destaque-meta">${item.ehSerie ? `<span>${escapar(item.bibliotecaNome)}</span><span>${escapar(contagemSerie(item))}</span>` : metaLinha(item)}${m.audienceScore ? `<span class="destaque-nota">${m.audienceScore}% do público</span>` : ""}</p>
+      <p class="destaque-meta">${item.ehSerie ? [item.year, item.metadata?.certification, contagemSerie(item)].filter(Boolean).map((v) => `<span>${escapar(v)}</span>`).join("") : metaLinha(item)}${m.audienceScore ? `<span class="destaque-nota">${m.audienceScore}% do público</span>` : ""}</p>
       ${m.overview ? `<p class="destaque-sinopse">${escapar(m.overview)}</p>` : ""}
       <div class="destaque-botoes">
         <button type="button" class="botao-assistir" data-play="${alvo.id}">${ICONE_PLAY}<span>${andamento ? "Continuar" : "Assistir"}${item.ehSerie ? ` ${rotuloEpisodio(alvo)}` : ""}</span></button>
@@ -233,13 +236,14 @@ function listaEpisodios(serie, temporada) {
     const andamento = emAndamento(e), visto = concluido(e);
     return `<article class="episodio${visto ? " visto" : ""}">
       <button type="button" class="episodio-capa" data-play="${e.id}" aria-label="Assistir ${escapar(rotuloEpisodio(e))}: ${escapar(nomeEpisodio(e))}">
-        ${imagem(e, "fundo", [780], "220px", "titulo-img")}
+        ${imagem(e, "cena", [320, 780], "(max-width: 700px) 42vw, 220px", "titulo-img")}
         <span class="episodio-play">${ICONE_PLAY}</span>
         ${andamento ? `<span class="titulo-progresso"><span style="width:${percentual(e).toFixed(1)}%"></span></span>` : ""}
       </button>
       <div class="episodio-info">
         <h4><span>${e.serie.episodio}${e.serie.episodioFinal ? `–${e.serie.episodioFinal}` : ""}.</span> ${escapar(nomeEpisodio(e))}</h4>
-        <p>${escapar(rotuloEpisodio(e))}${andamento ? ` · ${escapar(restante(ctx.progressFor(e.id)))}` : visto ? " · Assistido" : ""}</p>
+        <p>${escapar(rotuloEpisodio(e))}${e.metadata?.runtime ? ` · ${escapar(duracaoTexto(e.metadata.runtime))}` : ""}${andamento ? ` · ${escapar(restante(ctx.progressFor(e.id)))}` : visto ? " · Assistido" : ""}</p>
+        ${e.metadata?.episodeOverview ? `<p class="episodio-sinopse">${escapar(e.metadata.episodeOverview)}</p>` : ""}
       </div>
     </article>`;
   }).join("");
@@ -265,8 +269,18 @@ function abrirDetalhesSerie(serie) {
           ${andamento ? `<div class="destaque-progresso"><span style="width:${percentual(proximo).toFixed(1)}%"></span></div><p class="destaque-restante">${escapar(restante(ctx.progressFor(proximo.id)))}</p>` : ""}
         </div>
       </div>
-      <div class="detalhes-corpo detalhes-corpo-serie">
-        <p class="destaque-meta"><span>${escapar(serie.bibliotecaNome)}</span><span>${escapar(contagemSerie(serie))}</span></p>
+      <div class="detalhes-corpo">
+        <div class="detalhes-principal">
+          <p class="destaque-meta">${[serie.year, serie.metadata?.certification, contagemSerie(serie)].filter(Boolean).map((v) => `<span>${escapar(v)}</span>`).join("")}</p>
+          <p class="detalhes-sinopse">${escapar(serie.metadata?.overview || "Sem sinopse disponível.")}</p>
+        </div>
+        <div class="detalhes-lateral">
+          ${(serie.metadata?.genres ?? []).length ? `<p><span>Gêneros:</span> ${escapar(serie.metadata.genres.join(", "))}</p>` : ""}
+          ${serie.metadata?.originalTitle && serie.metadata.originalTitle !== serie.title ? `<p><span>Título original:</span> ${escapar(serie.metadata.originalTitle)}</p>` : ""}
+          ${serie.metadata?.studio ? `<p><span>Emissora:</span> ${escapar(serie.metadata.studio)}</p>` : ""}
+          ${serie.metadata?.audienceScore ? `<p><span>Público:</span> ${serie.metadata.audienceScore}%</p>` : ""}
+          <p><span>Biblioteca:</span> ${escapar(serie.bibliotecaNome)}</p>
+        </div>
       </div>
       <div class="temporadas">
         <div class="temporadas-abas" role="tablist">${serie.temporadas.map((n) => `<button type="button" role="tab" class="temporada-aba${n === temporada ? " ativa" : ""}" aria-selected="${n === temporada}" data-temporada="${n}">${n === 0 ? "Especiais" : `Temporada ${n}`}</button>`).join("")}</div>

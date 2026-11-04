@@ -30,7 +30,12 @@ try {
   const totalCartoes = await page.locator(".titulo-img").count();
   const pedidas = imagens.filter((i) => i.url.includes("poster") || i.url.includes("fundo"));
   // Imagens bem abaixo da tela (mais de 2 telas) não podem ter sido baixadas (loading=lazy).
-  const longe = await page.evaluate(() => [...document.querySelectorAll(".titulo-img")].filter((i) => i.getBoundingClientRect().top > innerHeight * 2).map((i) => i.currentSrc || i.src));
+  // (a mesma capa pode estar numa fileira visível e noutra lá embaixo: essas não contam)
+  const longe = await page.evaluate(() => {
+    const imgs = [...document.querySelectorAll(".titulo-img")];
+    const perto = new Set(imgs.filter((i) => i.getBoundingClientRect().top <= innerHeight * 2).map((i) => i.currentSrc || i.src));
+    return imgs.filter((i) => i.getBoundingClientRect().top > innerHeight * 2).map((i) => i.currentSrc || i.src).filter((s) => !perto.has(s));
+  });
   const baixadasLonge = longe.filter((src) => pedidas.some((p) => p.url === src));
   assert.deepEqual(baixadasLonge, [], "imagens fora da tela não são baixadas");
   assert.ok(pedidas.length <= totalCartoes + 1, `carregou ${pedidas.length} imagens para ${totalCartoes} cartões + destaque`);
@@ -64,8 +69,8 @@ try {
   await page.waitForSelector(".catalogo .grade");
   await page.locator('[data-filtro="ordem"]').selectOption("ano");
   // PQA-226: abaixo da capa, nome da obra e ano de lançamento (como no Jellyfin), visíveis sem passar o mouse.
-  const godfather = page.locator(".grade .titulo", { hasText: "The Godfather" }).first();
-  assert.equal(await godfather.locator(".titulo-legenda-nome").textContent(), "The Godfather");
+  const godfather = page.locator(".grade .titulo", { has: page.locator(".titulo-legenda-ano", { hasText: "1972" }) }).first();
+  assert.match(await godfather.locator(".titulo-legenda-nome").textContent(), /^(The Godfather|O Poderoso Chefão)$/);
   assert.equal(await godfather.locator(".titulo-legenda-ano").textContent(), "1972");
   assert.ok(await godfather.locator(".titulo-legenda-nome").isVisible());
   const capa = await godfather.locator(".titulo-capa").boundingBox(), legenda = await godfather.locator(".titulo-legenda").boundingBox();

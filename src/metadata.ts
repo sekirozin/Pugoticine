@@ -1,6 +1,7 @@
 import path from "node:path";
 import { config } from "./config.js";
 import type { MediaItem, MediaMetadata } from "./types.js";
+import { chaveEpisodio, Tmdb, type DadosTmdb } from "./tmdb.js";
 
 type RadarrImage = { coverType?: string; remoteUrl?: string };
 type RadarrMovie = {
@@ -49,8 +50,22 @@ function toMetadata(movie: RadarrMovie): MediaMetadata {
   };
 }
 
+type Serie = { id: string; nome: string; temporada: number; episodio: number; episodioFinal: number | null; nomeEpisodio: string | null };
+type ItemComSerie = MediaItem & { serie?: Serie };
+
+function deTmdb(d: DadosTmdb, base?: MediaMetadata): MediaMetadata {
+  return {
+    tmdbId: d.tmdbId, originalTitle: d.tituloOriginal || base?.originalTitle || "", overview: d.sinopse || base?.overview || "",
+    studio: d.estudio || base?.studio || "", runtime: d.duracao ?? base?.runtime ?? null, certification: d.classificacao || base?.certification || "",
+    genres: d.generos.length ? d.generos : base?.genres ?? [], posterUrl: d.poster || base?.posterUrl || "", backdropUrl: d.fundo || base?.backdropUrl || "",
+    audienceScore: d.nota ?? base?.audienceScore ?? null, criticScore: base?.criticScore ?? null, criticSource: base?.criticSource ?? "", year: d.ano
+  };
+}
+const nomeGenerico = (nome: string) => /^(epis[óo]dio|episode)\s*\d+$/i.test(nome.trim());
+
 export class MetadataCatalog {
   private movies: RadarrMovie[] = [];
+  constructor(private readonly tmdb: Tmdb | null = null) {}
 
   async refresh(): Promise<void> {
     if (!config.radarrUrl || !config.radarrApiKey) return;
@@ -63,7 +78,27 @@ export class MetadataCatalog {
     console.log(`Metadados Radarr atualizados: ${this.movies.length} título(s).`);
   }
 
-  enrich(item: MediaItem): MediaItem {
+  /** Radarr primeiro (ID do TMDB e notas da crítica); por cima, o TMDB em português (filmes e séries). */
+  enrich<T extends MediaItem>(item: T): T {
+    const radarr = this.enrichRadarr(item);
+    if (!this.tmdb) return radarr;
+    const comSerie = radarr as T & ItemComSerie;
+    if (comSerie.serie) {
+      const s = this.tmdb.serie(Tmdb.chaveSerie(item));
+      if (!s) return radarr;
+      const e = s.episodios[chaveEpisodio(comSerie.serie.temporada, comSerie.serie.episodio)];
+      const nomeArquivo = comSerie.serie.nomeEpisodio;
+      const nomeEpisodio = e?.nome && !nomeGenerico(e.nome) ? e.nome : nomeArquivo;
+      const serie = { ...comSerie.serie, nome: s.titulo || comSerie.serie.nome, nomeEpisodio };
+      const rotulo = `T${serie.temporada}E${String(serie.episodio).padStart(2, "0")}${serie.episodioFinal ? `-E${String(serie.episodioFinal).padStart(2, "0")}` : ""}`;
+      return { ...radarr, title: `${serie.nome} · ${rotulo}`, serie,
+        metadata: { ...deTmdb(s), runtime: e?.duracao ?? s.duracao, stillUrl: e?.cena || "", episodeOverview: e?.sinopse || "" } };
+    }
+    const f = this.tmdb.filme(Tmdb.chaveFilme(item));
+    return f ? { ...radarr, title: f.titulo || radarr.title, year: radarr.year || f.ano, metadata: deTmdb(f, radarr.metadata) } : radarr;
+  }
+
+  private enrichRadarr<T extends MediaItem>(item: T): T {
     const folder = item.relativePath.split(path.sep)[0] ?? "";
     const normalizedFolder = normalize(folder.replace(/\s*\((?:19|20)\d{2}\)\s*$/, ""));
     const normalizedTitle = normalize(item.title);

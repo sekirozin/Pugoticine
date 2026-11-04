@@ -16,6 +16,8 @@ services:
       PUGOTILAB_LOGIN_URL: "http://127.0.0.1:3015/auth"
       SCAN_INTERVAL_MS: "60000"
       PUGOTICINE_ACELERACAO: "vaapi"
+      # Metadados do TMDB (opcional): exporte TMDB_READ_TOKEN antes de subir; sem ele, só Radarr/quadros do vídeo.
+      TMDB_READ_TOKEN: ${TMDB_READ_TOKEN:-}
       TZ: "America/Maceio"
     volumes:
       - pugoticine-dados:/app/data

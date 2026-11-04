@@ -10,8 +10,8 @@ import fs from "node:fs";
 import path from "node:path";
 import type { MediaItem } from "./types.js";
 
-export type TipoImagem = "poster" | "fundo";
-export const LARGURAS: Record<TipoImagem, number[]> = { poster: [185, 342, 500, 780], fundo: [780, 1280, 1920] };
+export type TipoImagem = "poster" | "fundo" | "cena";
+export const LARGURAS: Record<TipoImagem, number[]> = { poster: [185, 342, 500, 780], fundo: [780, 1280, 1920], cena: [320, 780, 1280] };
 const VERSAO_DO_ALGORITMO = "1";
 const SIMULTANEAS = 2;
 

@@ -44,7 +44,8 @@ try {
   assert.match(await page.locator('[data-biblioteca]:has-text("Animes")').innerText(), /Séries · 3 itens/);
   const animes = (await req("GET", "/api/painel/bibliotecas")).corpo.bibliotecas.find(b => b.nome === "Animes");
   const media = (await req("GET", "/api/bootstrap")).corpo.media;
-  const episodios = media.filter(m => m.bibliotecaId === animes.id).map(m => m.title).sort();
+  // Nome da série vem do arquivo ou, com TMDB ativo, traduzido ("Daemons do Reino das Sombras").
+  const episodios = media.filter(m => m.bibliotecaId === animes.id).map(m => m.title.replace("Daemons do Reino das Sombras", "Daemons of the Shadow Realm")).sort();
   assert.deepEqual(episodios, ["Daemons of the Shadow Realm · T1E01", "Daemons of the Shadow Realm · T1E02", "Daemons of the Shadow Realm · T1E03"]);
 
   // Validação aparece na tela.
@@ -84,7 +85,11 @@ try {
   await page.locator('[data-form-usuario] [name="classificacaoMaxima"]').selectOption("12");
   await page.locator('[data-form-usuario] button[type="submit"]').click();
   await page.waitForFunction(() => /Configurações salvas/.test(document.querySelector("[data-form-usuario] [data-painel-status]")?.textContent ?? ""));
-  assert.equal((await req("GET", "/api/bootstrap", MARCOS)).corpo.media.length, 0, "itens sem classificação bloqueados");
+  // Sem TMDB a mídia de teste não tem classificação (nada aparece); com TMDB só aparece o que tem até 12 anos.
+  const idade = (c) => { const s = String(c ?? "").toUpperCase().replace(/^BR-/, ""); if (!s) return null; if (["L", "G", "TV-G", "TV-Y"].includes(s)) return 0; const tabela = { PG: 10, "TV-PG": 10, "PG-13": 13, "TV-14": 14, R: 17, "TV-MA": 17, "NC-17": 18 }; return s in tabela ? tabela[s] : Number(s.replace(/\D/g, "")) || null; };
+  const vistos = (await req("GET", "/api/bootstrap", MARCOS)).corpo.media;
+  assert.ok(vistos.every(m => idade(m.metadata?.certification) !== null && idade(m.metadata.certification) <= 12), `itens sem classificação ou acima de 12 bloqueados: ${vistos.map(m => `${m.title} (${m.metadata?.certification})`)}`);
+  assert.ok(!vistos.some(m => m.title === "Teste Longo"), "sem classificação: bloqueado");
   const marcos = (await req("GET", "/api/painel/usuarios")).corpo.usuarios.find(u => u.usuario === "marcos");
   assert.deepEqual([marcos.todasBibliotecas, marcos.bibliotecas, marcos.classificacaoMaxima, marcos.bloquearSemClassificacao], [false, ["filmes"], 12, true], "relido do servidor");
 

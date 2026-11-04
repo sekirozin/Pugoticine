@@ -95,7 +95,7 @@ try {
   await page.waitForFunction(() => document.querySelector("#player-modal").hidden);
 
   // Legenda de texto (externa .pt-BR.srt) entra sem recarregar o vídeo.
-  await page.locator("[data-play]", { hasText: "The Godfather" }).first().click();
+  await page.locator("[data-play]", { hasText: /The Godfather|O Poderoso Chefão/ }).first().click();
   await tocando();
   const pedidos = pedidosDeReproducao;
   await page.locator("#osd-legendas").click();

@@ -26,6 +26,10 @@ export type MediaMetadata = {
   audienceScore: number | null;
   criticScore: number | null;
   criticSource: string;
+  /** Série: ano de estreia; episódio: imagem da cena e sinopse do episódio (TMDB). */
+  year?: number | null;
+  stillUrl?: string;
+  episodeOverview?: string;
 };
 
 export type MediaItem = {

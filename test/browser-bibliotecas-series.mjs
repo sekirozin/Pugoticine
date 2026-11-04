@@ -40,7 +40,8 @@ try {
   await page.waitForFunction(() => document.querySelector(".catalogo h1")?.textContent === "Animes");
   assert.equal(await page.locator('#nav-bibliotecas .nav-item.active').textContent(), "Animes");
   const nomes = await page.locator(".grade .titulo-legenda-nome").allTextContents();
-  assert.deepEqual(nomes, ["Daemons of the Shadow Realm"], `animes: ${nomes}`);
+  assert.equal(nomes.length, 1, `animes: ${nomes}`);
+  assert.match(nomes[0], /^(?:Daemons of the Shadow Realm|Daemons do Reino das Sombras)$/, "nome do arquivo ou traduzido pelo TMDB");
   assert.equal(await page.locator(".grade .titulo-selo").textContent(), "3");
   assert.match(await page.locator(".grade .titulo-meta em").textContent(), /1 temporada · 3 episódios/);
   if (fotos) await page.screenshot({ path: path.join(fotos, "biblioteca-animes.png") });
@@ -51,12 +52,12 @@ try {
   assert.deepEqual(await page.locator(".temporada-aba").allTextContents(), ["Temporada 1"]);
   const episodios = await page.locator(".episodio-info h4").allTextContents();
   assert.equal(episodios.length, 3);
-  assert.match(episodios[0], /^1\.\s+Episódio 1$/);
-  assert.match(episodios[2], /^3\.\s+Episódio 3$/);
+  assert.match(episodios[0], /^1\.\s+\S/, "número e nome (do arquivo, do TMDB ou \"Episódio 1\")");
+  assert.match(episodios[2], /^3\.\s+\S/);
   if (fotos) await page.screenshot({ path: path.join(fotos, "serie-detalhes.png") });
   await page.locator(".episodio-capa").nth(1).click();
   await page.waitForFunction(() => !document.querySelector("#player-modal").hidden);
-  assert.match(await page.locator("#player-title").textContent(), /Daemons of the Shadow Realm · T1E02/);
+  assert.match(await page.locator("#player-title").textContent(), /(?:Daemons of the Shadow Realm|Daemons do Reino das Sombras) · T1E02/);
   await page.mouse.move(700, 400); await page.locator("#player-close").click();
   await page.waitForFunction(() => document.querySelector("#player-modal").hidden);
 

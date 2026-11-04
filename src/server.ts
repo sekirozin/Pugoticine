@@ -8,6 +8,7 @@ import { Catalog } from "./catalog.js";
 import { config } from "./config.js";
 import { streamFile, subtitleToVtt } from "./media.js";
 import { MetadataCatalog } from "./metadata.js";
+import { Tmdb } from "./tmdb.js";
 import { createPlaybackPlan } from "./playback.js";
 import { ProbeService } from "./probe.js";
 import { Imagens, type TipoImagem } from "./imagens.js";
@@ -41,7 +42,14 @@ if (restaurado) bancoPainel.registrar("BackupRestored", `Backup restaurado: ${re
 const raizesPermitidas = (process.env.PUGOTICINE_PASTAS_PERMITIDAS ?? "/media").split(",").map(r => path.resolve(r.trim())).filter(Boolean);
 const catalog = new GerenciadorBibliotecas(bancoPainel.db, config.mediaRoot, raizesPermitidas, () => { lastScanAt = new Date().toISOString(); });
 const store = new Store(config.dbFile);
-const metadata = new MetadataCatalog();
+// Metadados em português do TMDB (mesma chave do PugotiList), por cima do Radarr. Sem chave, só Radarr.
+const tmdb = config.tmdbToken ? new Tmdb(config.tmdbToken, path.join(config.dataDir, "tmdb-cache.json"), config.tmdbApiUrl) : null;
+const metadata = new MetadataCatalog(tmdb);
+/** Busca no TMDB o que ainda não está no cache (em segundo plano). */
+function sincronizarTmdb(): void {
+  if (!tmdb) return;
+  tmdb.sincronizar(catalog.list().map((item) => metadata.enrich(item))).catch((erro) => console.error("Falha ao atualizar metadados do TMDB:", erro));
+}
 const probe = new ProbeService(path.join(config.dataDir, "probe-cache.json"));
 // Pôsteres e fundos em WebP no tamanho certo (Radarr ou um quadro do próprio vídeo), em cache.
 const imagens = new Imagens(path.join(config.dataDir, "imagens"), config.ffmpegPath, (media) => { try { return probe.analyze(media).duration; } catch { return 0; } });
@@ -87,7 +95,7 @@ const painel = new RotasPainel({
   banco: bancoPainel, registros, json, corpo: body, bibliotecas: catalog, raizesPermitidas,
   backups: new Backups(path.join(config.dataDir, "backups"), fontesBackup, versaoApp),
   catalogo: () => catalog.list(), ultimaVarredura: () => lastScanAt, atividadeProgresso: () => store.listActivity(50),
-  varrer: async () => { scan(); return catalog.list().length; }, atualizarMetadados: () => metadata.refresh(),
+  varrer: async () => { scan(); return catalog.list().length; }, atualizarMetadados: async () => { await metadata.refresh(); await tmdb?.sincronizar(catalog.list().map((item) => metadata.enrich(item))); },
   intervaloMs: config.scanIntervalMs, raizMidia: config.mediaRoot, pastaDados: config.dataDir, ffmpeg: config.ffmpegPath, versao: versaoApp
 });
 
@@ -95,6 +103,7 @@ function scan(): void {
   const items = catalog.scan();
   lastScanAt = new Date().toISOString();
   console.log(`Catálogo atualizado: ${items.length} mídia(s).`);
+  sincronizarTmdb();
 }
 
 function json(res: ServerResponse, status: number, body: unknown): void {
@@ -121,13 +130,19 @@ function publicMedia(profile: PugotiProfile) {
     ...item,
     // Endereços versionados das imagens; o cliente acrescenta &l=<largura> (srcset).
     imagens: {
-      poster: `/api/media/${item.id}/imagem/poster?v=${imagens.versao(item as MediaItem, item.metadata?.posterUrl ?? "")}`,
-      fundo: `/api/media/${item.id}/imagem/fundo?v=${imagens.versao(item as MediaItem, item.metadata?.backdropUrl ?? "")}`
+      poster: `/api/media/${item.id}/imagem/poster?v=${imagens.versao(item as unknown as MediaItem, item.metadata?.posterUrl ?? "")}`,
+      fundo: `/api/media/${item.id}/imagem/fundo?v=${imagens.versao(item as unknown as MediaItem, item.metadata?.backdropUrl ?? "")}`,
+      cena: `/api/media/${item.id}/imagem/cena?v=${imagens.versao(item as unknown as MediaItem, imagemRemota(item, "cena"))}`
     }
   }));
 }
 function bibliotecasVisiveis(profile: PugotiProfile) {
   return catalog.bibliotecas().filter((b) => b.ativa && painel.podeVerBiblioteca(profile, b.id)).map(({ id, nome, tipo }) => ({ id, nome, tipo }));
+}
+/** Imagem de origem: pôster e fundo do filme/série; "cena" é a imagem do episódio (ou o fundo, se não houver). */
+function imagemRemota(item: { metadata?: MediaItem["metadata"] }, tipo: TipoImagem): string {
+  const m = item.metadata;
+  return (tipo === "poster" ? m?.posterUrl : tipo === "fundo" ? m?.backdropUrl : m?.stillUrl || m?.backdropUrl) ?? "";
 }
 function visivel<T extends { id: string }>(profile: PugotiProfile, media: T | null): T | null {
   return media && painel.podeVer(profile, metadata.enrich(media as never)) ? media : null;
@@ -163,13 +178,13 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<voi
     return;
   }
 
-  const imagemMatch = url.pathname.match(/^\/api\/media\/([a-f0-9]{24})\/imagem\/(poster|fundo)$/);
+  const imagemMatch = url.pathname.match(/^\/api\/media\/([a-f0-9]{24})\/imagem\/(poster|fundo|cena)$/);
   if (imagemMatch && req.method === "GET") {
     const base = visivel(profile, catalog.get(imagemMatch[1]));
     if (!base) { json(res, 404, { error: "Mídia não encontrada." }); return; }
     const media = metadata.enrich(base);
     const tipo = imagemMatch[2] as TipoImagem;
-    const remota = (tipo === "poster" ? media.metadata?.posterUrl : media.metadata?.backdropUrl) ?? "";
+    const remota = imagemRemota(media, tipo);
     const arquivo = await imagens.caminho(media, tipo, Number(url.searchParams.get("l")) || 500, remota);
     const atual = url.searchParams.get("v") === imagens.versao(media, remota);
     res.writeHead(200, { "content-type": "image/webp", "content-length": fs.statSync(arquivo).size, "cache-control": atual ? "private, max-age=31536000, immutable" : "private, no-cache" });
@@ -272,7 +287,7 @@ async function staticFile(req: IncomingMessage, res: ServerResponse): Promise<vo
 }
 
 scan();
-metadata.refresh().catch((error) => console.error("Falha ao atualizar metadados:", error));
+metadata.refresh().catch((error) => console.error("Falha ao atualizar metadados:", error)).finally(sincronizarTmdb);
 // Painel › Tarefas Agendadas: os gatilhos de cada tarefa (padrão: varredura e metadados a cada SCAN_INTERVAL_MS)
 // são verificados pelo agendador, como o TaskManager do Jellyfin.
 painel.iniciarAgendador();

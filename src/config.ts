@@ -18,5 +18,8 @@ export const config = {
   ffmpegPath: process.env.FFMPEG_PATH ?? "ffmpeg",
   // Aceleração da conversão de vídeo, como a "Aceleração de hardware" do Jellyfin: "vaapi" ou "nenhuma".
   aceleracao: process.env.PUGOTICINE_ACELERACAO === "vaapi" ? "vaapi" as const : "nenhuma" as const,
+  // TMDB (metadados em português): token de leitura v4, o mesmo do PugotiList.
+  tmdbToken: process.env.TMDB_READ_TOKEN ?? "",
+  tmdbApiUrl: process.env.TMDB_API_URL ?? "https://api.themoviedb.org/3",
   dispositivoVaapi: process.env.PUGOTICINE_VAAPI_DISPOSITIVO ?? "/dev/dri/renderD128"
 };

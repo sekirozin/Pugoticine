@@ -29,7 +29,7 @@ try {
   assert.equal(await marcos.evaluate(async () => (await fetch("/api/painel")).status), 403);
   // marcos começa a assistir um filme (o player grava o progresso a cada 15 s).
   const filmes = await marcos.evaluate(async () => (await (await fetch("/api/bootstrap")).json()).media);
-  const godfather = filmes.find(f => f.title === "The Godfather");
+  const godfather = filmes.find(f => f.title === "The Godfather" || f.metadata?.originalTitle === "The Godfather");
   assert.equal(await marcos.evaluate(async (id) => (await fetch("/api/progress", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mediaId: id, position: 30, duration: 60 }) })).status, godfather.id), 200);
 
   // Administrador.
@@ -47,9 +47,9 @@ try {
   assert.match(servidor, /FFmpeg\s+\d/);
   assert.equal(await admin.locator('[data-contagem="filmes"]').innerText(), String(filmes.length));
   const assistindo = await admin.locator("[data-painel-assistindo]").innerText();
-  assert.match(assistindo, /The Godfather/);
+  assert.match(assistindo, /The Godfather|O Poderoso Chefão/);
   assert.match(assistindo, /marcos · 0:30 de 1:00/);
-  assert.match(await admin.locator("[data-painel-atividade]").innerText(), /marcos[\s\S]*The Godfather/);
+  assert.match(await admin.locator("[data-painel-atividade]").innerText(), /marcos[\s\S]*(The Godfather|O Poderoso Chefão)/);
   assert.match(await admin.locator("[data-painel]").innerText(), /Armazenamento[\s\S]*livres de/);
   if (fotos) await admin.screenshot({ path: path.join(fotos, "painel.png"), fullPage: true });
 

@@ -105,7 +105,7 @@ try {
   await admin.locator('[name="MaxResumePct"]').fill("80");
   assert.equal(await salvar(admin), "Configurações salvas.");
   const filmes = (await req("GET", "/api/bootstrap", MARCOS)).corpo.media;
-  const filme = filmes.find(f => f.title === "The Godfather");
+  const filme = filmes.find(f => f.title === "The Godfather" || f.metadata?.originalTitle === "The Godfather");
   assert.equal((await req("POST", "/api/progress", MARCOS, { mediaId: filme.id, position: 50, duration: 60 })).corpo.progress.completed, true);
   await req("PUT", "/api/painel/config/reproducao-retomar", ADMIN, { MaxResumePct: 90 });
   assert.equal((await req("POST", "/api/progress", MARCOS, { mediaId: filme.id, position: 50, duration: 60 })).corpo.progress.completed, false);
