@@ -22,6 +22,8 @@ services:
       BAZARR_URL: "http://bazarr-dev:8080"
       BAZARR_API_KEY: "bazarr-dev"
       BAZARR_RAIZ: "/jellyfin"
+      # Resumo do Pugoti Profile (rota interna /api/pugotilab/assistindo/<usuário>, PQA-274).
+      PUGOTILAB_RESUMO_TOKEN: "resumo-dev"
       TZ: "America/Maceio"
     volumes:
       - pugoticine-dados:/app/data

@@ -85,6 +85,37 @@ function sincronizarBazarr(): void {
   }).catch((erro) => console.error("Falha ao ler o histórico do Bazarr:", erro instanceof Error ? erro.message : erro));
 }
 
+/**
+ * "Assistindo no Pugoticine" para o resumo do Pugoti Profile: o que a pessoa começou e não terminou (até 8, mais
+ * recentes primeiro). Só o auth chama (token próprio, rede interna); não depende da sessão de quem vê o perfil.
+ */
+async function rotaResumo(req: IncomingMessage, res: ServerResponse, username: string): Promise<void> {
+  const token = String(req.headers["x-pugotilab-resumo"] ?? "");
+  const esperado = Buffer.from(config.resumoToken);
+  if (!config.resumoToken || token.length !== esperado.length || !crypto.timingSafeEqual(Buffer.from(token), esperado)) { json(res, 401, { error: "Token inválido." }); return; }
+  const itens = store.listProgress(username.toLowerCase())
+    .filter((p) => !p.completed && p.duration > 0 && p.position > 30 && p.position / p.duration < 0.95)
+    .map((p) => ({ p, item: catalog.get(p.mediaId) }))
+    .filter((x): x is { p: typeof x.p; item: NonNullable<typeof x.item> } => Boolean(x.item))
+    .slice(0, 8)
+    .map(({ p, item }) => {
+      const media = metadata.enrich(item);
+      const serie = item.serie;
+      const titulo = serie ? media.title.split(" · ")[0] || serie.nome : media.title;
+      const faltam = Math.max(1, Math.round((p.duration - p.position) / 60));
+      const episodio = serie ? `T${serie.temporada}E${String(serie.episodio).padStart(2, "0")}${serie.nomeEpisodio ? ` · ${serie.nomeEpisodio}` : ""} · ` : "";
+      return {
+        title: titulo,
+        detail: `${episodio}faltam ${faltam} min`,
+        percent: Math.round((p.position / p.duration) * 100),
+        imageUrl: `${config.enderecoPublico}/api/media/${item.id}/imagem/poster?v=${imagens.versao(media as unknown as MediaItem, media.metadata?.posterUrl ?? "")}&l=342`,
+        url: `${config.enderecoPublico}/`,
+        updatedAt: p.updatedAt
+      };
+    });
+  json(res, 200, { watching: itens });
+}
+
 /** Busca no TMDB o que ainda não está no cache (em segundo plano). */
 function sincronizarTmdb(): void {
   if (!tmdb) return;
@@ -340,6 +371,8 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.url === "/health") { json(res, 200, { status: "ok", media: catalog.list().length, lastScanAt }); return; }
     if (req.url === "/api/organizador/concluido" && req.method === "POST") { await rotaOrganizador(req, res); return; }
+    const resumo = req.url?.match(/^\/api\/pugotilab\/assistindo\/([a-z0-9._-]{1,64})$/i);
+    if (resumo && req.method === "GET") { await rotaResumo(req, res, resumo[1]); return; }
     const rede = painel.acessoDeRede(req);
     if (!rede.permitido) { res.writeHead(403, { "content-type": "text/plain; charset=utf-8" }); res.end(`Acesso negado pela configuração de Redes do Pugoticine (${rede.motivo}).`); return; }
     if (req.url?.startsWith("/api/")) {
