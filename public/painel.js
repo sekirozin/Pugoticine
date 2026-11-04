@@ -109,11 +109,13 @@ function drawer() {
 
 export async function abrirPainel(container, ferramentas) {
   estado.container = container; estado.f = ferramentas;
+  // A página vem do endereço (/painel/<página>), quando o app usa rotas.
+  if (ferramentas.pagina) estado.atual = ferramentas.pagina;
   if (!estado.paginas.length) {
     try { estado.paginas = (await ferramentas.api("/api/painel/paginas")).paginas; }
     catch (erro) { container.innerHTML = `<div class="empty">${ferramentas.escapeHtml(erro.message)}</div>`; return; }
   }
-  if (!estado.paginas.some((p) => p.id === estado.atual)) estado.atual = "painel";
+  if (!estado.paginas.some((p) => p.id === estado.atual)) { estado.atual = "painel"; ferramentas.paginaInexistente?.(); }
   const atual = estado.paginas.find((p) => p.id === estado.atual);
   if (atual?.pai) estado.abertos.add(atual.pai);
   const gaveta = drawer();
@@ -131,6 +133,8 @@ export async function abrirPainel(container, ferramentas) {
 }
 
 function irPara(id) {
+  // Com rotas, o app grava /painel/<página> e chama abrirPainel de novo com ela.
+  if (estado.f?.irParaPagina) { estado.tarefaAberta = null; estado.f.irParaPagina(id); return; }
   estado.atual = id;
   estado.tarefaAberta = null;
   try { sessionStorage.setItem("painel:pagina", id); } catch { /* ignora */ }

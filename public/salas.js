@@ -62,7 +62,11 @@
       for (let i = 0; i < 3; i++) await relogio.medir().catch(() => {});
       this.eventos = new EventSource(`/api/salas/${salaInfo.id}/eventos`);
       this.eventos.addEventListener("sala", (e) => this.receber(JSON.parse(e.data)));
-      this.eventos.addEventListener("encerrada", () => { aviso("A sala foi encerrada."); this.sair(); });
+      this.eventos.addEventListener("encerrada", () => {
+        aviso("A sala foi encerrada.");
+        this.sair();
+        if (window.pugoticine?.rota()?.sala) irPara({ tela: "salas" }, true);
+      });
       this.tempoPing = setInterval(async () => {
         await relogio.medir().catch(() => {});
         this.comando("ping", { ping: Math.round(relogio.ping) });
@@ -251,7 +255,7 @@
     const corpo = $("#salas-corpo");
     if (sala.atual) {
       const s = sala.atual;
-      const link = s.codigoConvite ? `${location.origin}/?sala=${s.id}&convite=${s.codigoConvite}` : "";
+      const link = s.codigoConvite ? `${location.origin}/salas/${encodeURIComponent(s.id)}?convite=${encodeURIComponent(s.codigoConvite)}` : "";
       corpo.innerHTML = `
         <div class="sala-atual" data-sala-atual="${esc(s.id)}">
           <div class="sala-cabecalho"><div><span class="sala-tipo sala-tipo-${s.tipo}">${ROTULO[s.tipo]}</span><h3>${esc(s.nome)}</h3>
@@ -295,6 +299,34 @@
   async function entrar(id, credenciais = {}) {
     const { sala: info } = await api(`/api/salas/${id}/entrar`, { method: "POST", body: JSON.stringify(credenciais) });
     await sala.conectar(info);
+    irPara({ tela: "salas", sala: info.id }, true);
+  }
+
+  // ---------- rotas (/salas, /salas/<id>) ----------
+  /** Grava o endereço pelo app (public/rotas.js); `substituir` troca o atual em vez de empilhar. */
+  function irPara(rota, substituir = false) {
+    return window.pugoticine?.navegar?.(rota, { substituir });
+  }
+  function abrirJanela() {
+    const painel = $("#salas-painel");
+    if (!painel) return;
+    if (painel.hidden) { painel.hidden = false; if (sala.atual) renderizar(); else carregar(); }
+  }
+  // O app avisa cada rota aplicada: /salas abre a janela (e entra na sala do endereço); outra rota a esconde
+  // (a pessoa continua na sala).
+  let entrando = null;
+  async function aplicarRota(rota) {
+    montar();
+    const painel = $("#salas-painel");
+    if (rota.tela !== "salas") { painel.hidden = true; return; }
+    abrirJanela();
+    if (rota.sala && sala.atual?.id !== rota.sala && entrando !== rota.sala) {
+      entrando = rota.sala;
+      try { await entrar(rota.sala, { convite: rota.convite }); renderizar(); }
+      catch (erro) { aviso(erro.message); irPara({ tela: "salas" }, true); }
+      finally { entrando = null; }
+    }
+    else if (!rota.sala && sala.atual) irPara({ tela: "salas", sala: sala.atual.id }, true);
   }
 
   function montar() {
@@ -313,21 +345,21 @@
     painel.id = "salas-painel"; painel.className = "salas-painel"; painel.hidden = true;
     painel.innerHTML = '<div class="salas-caixa"><div class="sala-cabecalho"><h2>Salas de filme</h2><button class="sala-botao secundario" data-salas-fechar>Fechar</button></div><div id="salas-corpo"></div></div>';
     document.body.append(painel);
-    botao.addEventListener("click", () => { painel.hidden = false; if (sala.atual) renderizar(); else carregar(); });
+    botao.addEventListener("click", () => irPara(sala.atual ? { tela: "salas", sala: sala.atual.id } : { tela: "salas" }));
     painel.addEventListener("click", async (e) => {
       const alvo = e.target;
       if (!(alvo instanceof Element)) return;
       try {
-        if (alvo.closest("[data-salas-fechar]") || alvo === painel) { painel.hidden = true; return; }
+        if (alvo.closest("[data-salas-fechar]") || alvo === painel) { window.pugoticine?.voltar(); return; }
         if (alvo.closest("[data-sala-entrar]")) {
           const cartao = alvo.closest("[data-sala-id]");
           await entrar(cartao.dataset.salaId, { senha: $("[data-sala-senha-entrada]", cartao)?.value });
           return;
         }
-        if (alvo.closest("[data-sala-sair]")) { sala.sair(); carregar(); return; }
+        if (alvo.closest("[data-sala-sair]")) { sala.sair(); irPara({ tela: "salas" }, true); carregar(); return; }
         if (alvo.closest("[data-sala-assistir]")) { await sala.assistir(); return; }
         if (alvo.closest("[data-sala-excluir]") && confirm("Encerrar a sala para todos?")) {
-          await api(`/api/salas/${sala.atual.id}`, { method: "DELETE" }); sala.sair(); carregar(); return;
+          await api(`/api/salas/${sala.atual.id}`, { method: "DELETE" }); sala.sair(); irPara({ tela: "salas" }, true); carregar(); return;
         }
         if (alvo.closest("[data-sala-link]")) { alvo.select(); navigator.clipboard?.writeText(alvo.value).then(() => aviso("Link copiado.")).catch(() => {}); }
       }
@@ -344,6 +376,7 @@
         if (e.target.matches("[data-sala-criar]")) {
           const { sala: info } = await api("/api/salas", { method: "POST", body: JSON.stringify({ ...dados, convidados: String(dados.convidados || "").split(",") }) });
           await sala.conectar(info);
+          irPara({ tela: "salas", sala: info.id }, true);
         }
         if (e.target.matches("[data-sala-convidar]")) {
           await api(`/api/salas/${sala.atual.id}/convidar`, { method: "POST", body: JSON.stringify({ usuarios: String(dados.usuarios).split(",") }) });
@@ -355,21 +388,9 @@
     ligarPlayer();
   }
 
-  // Link de convite: /?sala=<id>&convite=<código> (ou só ?sala=<id> para salas públicas).
-  async function abrirPeloLink() {
-    const p = new URLSearchParams(location.search);
-    const id = p.get("sala");
-    if (!id) return;
-    history.replaceState(null, "", location.pathname);
-    try {
-      await entrar(id, { convite: p.get("convite") || undefined });
-      $("#salas-painel").hidden = false;
-      renderizar();
-    }
-    catch (erro) { aviso(erro.message); }
-  }
-
+  // Link de convite: /salas/<id>?convite=<código> (o antigo /?sala=<id>&convite=… vira esse endereço no app).
   window.pugoticineSalas = { sala, relogio };
-  window.addEventListener("pugoticine:pronto", () => { montar(); abrirPeloLink(); }, { once: true });
-  if (window.pugoticine?.midias?.().length) { montar(); abrirPeloLink(); }
+  window.addEventListener("pugoticine:pronto", () => montar(), { once: true });
+  window.addEventListener("pugoticine:rota", (evento) => { aplicarRota(evento.detail).catch((erro) => console.error("Salas:", erro)); });
+  if (window.pugoticine?.midias?.().length) montar();
 })();

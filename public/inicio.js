@@ -225,7 +225,7 @@ function telaBiblioteca(biblioteca) {
 }
 
 // ---------- janela de detalhes ----------
-function fecharDetalhes() {
+export function fecharDetalhes() {
   const janela = document.querySelector(".detalhes");
   if (!janela) return;
   janela.remove();
@@ -249,14 +249,14 @@ function listaEpisodios(serie, temporada) {
     </article>`;
   }).join("");
 }
-function abrirDetalhesSerie(serie) {
+function abrirDetalhesSerie(serie, temporadaPedida) {
   fecharDetalhes();
   ctx.focoAnterior = document.activeElement;
   const proximo = proximoEpisodio(serie);
   const andamento = emAndamento(proximo);
-  const temporada = proximo.serie.temporada;
+  const temporada = serie.temporadas.includes(temporadaPedida) ? temporadaPedida : proximo.serie.temporada;
   const outras = ctx.dados.entradas.filter((x) => x.id !== serie.id && x.bibliotecaId === serie.bibliotecaId).slice(0, 12);
-  document.body.insertAdjacentHTML("beforeend", `<div class="detalhes" role="dialog" aria-modal="true" aria-label="${escapar(serie.title)}" data-serie="${serie.id}">
+  document.body.insertAdjacentHTML("beforeend", `<div class="detalhes" role="dialog" aria-modal="true" aria-label="${escapar(serie.title)}" data-serie="${serie.id}" data-titulo-id="${serie.id}">
     <div class="detalhes-caixa">
       <button type="button" class="detalhes-fechar" data-fechar-detalhes aria-label="Fechar">${ICONE_FECHAR}</button>
       <div class="detalhes-topo">
@@ -293,19 +293,31 @@ function abrirDetalhesSerie(serie) {
   document.body.classList.add("detalhes-aberto");
   document.querySelector(".detalhes .botao-assistir")?.focus();
 }
-function trocarTemporada(botao) {
-  const janela = botao.closest(".detalhes");
-  const serie = ctx.dados.series.get(janela?.dataset.serie);
-  if (!serie) return;
-  const n = Number(botao.dataset.temporada);
-  janela.querySelectorAll(".temporada-aba").forEach((b) => { const ativa = b === botao; b.classList.toggle("ativa", ativa); b.setAttribute("aria-selected", String(ativa)); });
+/** Mostra a temporada `n` na janela da série aberta (aba e lista de episódios). */
+export function mostrarTemporada(n) {
+  const janela = document.querySelector(".detalhes[data-serie]");
+  const serie = ctx?.dados?.series.get(janela?.dataset.serie);
+  if (!serie || !serie.temporadas.includes(n)) return;
+  janela.querySelectorAll(".temporada-aba").forEach((b) => { const ativa = Number(b.dataset.temporada) === n; b.classList.toggle("ativa", ativa); b.setAttribute("aria-selected", String(ativa)); });
   janela.querySelector(".episodios").innerHTML = listaEpisodios(serie, n);
 }
-export function abrirDetalhes(id) {
+function trocarTemporada(botao) {
+  const janela = botao.closest(".detalhes");
+  const n = Number(botao.dataset.temporada);
+  if (ctx.aoTrocarTemporada && janela?.dataset.serie) ctx.aoTrocarTemporada(janela.dataset.serie, n);
+  else mostrarTemporada(n);
+}
+/** Id do filme/série com a janela de detalhes aberta (ou null). */
+export function detalhesAbertos() {
+  return document.querySelector(".detalhes")?.dataset.tituloId ?? null;
+}
+/** Abre a janela de detalhes de um filme ou série; devolve false se o título não existe. */
+export function abrirDetalhes(id, temporada) {
+  if (!ctx?.dados) return false;
   const serie = ctx.dados.series.get(id);
-  if (serie) { abrirDetalhesSerie(serie); return; }
+  if (serie) { abrirDetalhesSerie(serie, temporada); return true; }
   const item = ctx.media.find((m) => m.id === id);
-  if (!item) return;
+  if (!item) return false;
   fecharDetalhes();
   ctx.focoAnterior = document.activeElement;
   const m = item.metadata || {};
@@ -313,7 +325,7 @@ export function abrirDetalhes(id) {
   const parecidos = ctx.dados.entradas.filter((x) => x.id !== item.id && (x.metadata?.genres ?? []).some((g) => (m.genres ?? []).includes(g))).slice(0, 12);
   const extras = parecidos.length ? parecidos : ctx.dados.entradas.filter((x) => x.id !== item.id && x.bibliotecaId === item.bibliotecaId).slice(0, 12);
   const linha = (rotulo, valor) => valor ? `<p><span>${rotulo}:</span> ${escapar(valor)}</p>` : "";
-  document.body.insertAdjacentHTML("beforeend", `<div class="detalhes" role="dialog" aria-modal="true" aria-label="${escapar(item.title)}">
+  document.body.insertAdjacentHTML("beforeend", `<div class="detalhes" role="dialog" aria-modal="true" aria-label="${escapar(item.title)}" data-titulo-id="${item.id}">
     <div class="detalhes-caixa">
       <button type="button" class="detalhes-fechar" data-fechar-detalhes aria-label="Fechar">${ICONE_FECHAR}</button>
       <div class="detalhes-topo">
@@ -345,6 +357,7 @@ export function abrirDetalhes(id) {
   </div>`);
   document.body.classList.add("detalhes-aberto");
   document.querySelector(".detalhes [data-play]")?.focus();
+  return true;
 }
 
 // ---------- API usada pelo app.js ----------
@@ -356,6 +369,8 @@ export function renderCatalogo(conteudo, contexto) {
   ctx = { ...ctx, ...contexto };
   if (contexto.media || !ctx.dados) ctx.dados = montarEntradas(ctx.media);
   if (ctx.ultimaView !== ctx.view) { ctx.filtros = {}; ctx.ultimaView = ctx.view; }
+  // Filtros vindos do endereço (/biblioteca/<id>?genero=&ordem=).
+  if (contexto.filtros) ctx.filtros = contexto.filtros;
   const { media, view, query } = ctx;
   const busca = query.trim().toLocaleLowerCase("pt-BR");
   // "movies" (endereço antigo) = primeira biblioteca de filmes.
@@ -384,6 +399,11 @@ function atualizarSetas(raiz) {
   });
 }
 
+/** Fechar pelo X, pelo fundo ou pelo Esc: com rotas, volta ao endereço anterior (que fecha a janela). */
+function pedirFecharDetalhes() {
+  if (ctx.aoFecharDetalhes) ctx.aoFecharDetalhes(); else fecharDetalhes();
+}
+
 let ligado = false;
 function ligar(conteudo) {
   if (ligado) return;
@@ -400,8 +420,12 @@ function ligar(conteudo) {
       return;
     }
     const detalhes = alvo.closest("[data-detalhes]");
-    if (detalhes && (conteudo.contains(detalhes) || detalhes.closest(".detalhes"))) { evento.preventDefault(); abrirDetalhes(detalhes.dataset.detalhes); return; }
-    if (alvo.closest("[data-fechar-detalhes]") || alvo.classList.contains("detalhes")) { fecharDetalhes(); return; }
+    if (detalhes && (conteudo.contains(detalhes) || detalhes.closest(".detalhes"))) {
+      evento.preventDefault();
+      if (ctx.aoAbrirDetalhes) ctx.aoAbrirDetalhes(detalhes.dataset.detalhes); else abrirDetalhes(detalhes.dataset.detalhes);
+      return;
+    }
+    if (alvo.closest("[data-fechar-detalhes]") || alvo.classList.contains("detalhes")) { pedirFecharDetalhes(); return; }
     const aba = alvo.closest("[data-temporada]");
     if (aba && aba.closest(".detalhes")) { trocarTemporada(aba); return; }
     const seta = alvo.closest("[data-rolar]");
@@ -415,9 +439,9 @@ function ligar(conteudo) {
     const filtro = evento.target.closest?.("[data-filtro]");
     if (!filtro) return;
     ctx.filtros = { ...(ctx.filtros ?? {}), [filtro.dataset.filtro]: filtro.value };
-    renderCatalogo(conteudo, {});
+    if (ctx.aoMudarFiltros) ctx.aoMudarFiltros(ctx.filtros); else renderCatalogo(conteudo, {});
   });
-  document.addEventListener("keydown", (evento) => { if (evento.key === "Escape" && document.querySelector(".detalhes")) { evento.stopPropagation(); fecharDetalhes(); } }, true);
+  document.addEventListener("keydown", (evento) => { if (evento.key === "Escape" && document.querySelector(".detalhes")) { evento.stopPropagation(); pedirFecharDetalhes(); } }, true);
   // Imagem carregada: aparece suavemente (sem "piscar" o texto reserva).
   document.addEventListener("load", (evento) => { if (evento.target instanceof HTMLImageElement) evento.target.classList.add("carregada"); }, true);
   // Barra superior transparente sobre o destaque até rolar (como nos serviços de streaming).

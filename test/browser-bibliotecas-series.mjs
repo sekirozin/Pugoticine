@@ -60,6 +60,10 @@ try {
   assert.match(await page.locator("#player-title").textContent(), /(?:Daemons of the Shadow Realm|Daemons do Reino das Sombras) · T1E02/);
   await page.mouse.move(700, 400); await page.locator("#player-close").click();
   await page.waitForFunction(() => document.querySelector("#player-modal").hidden);
+  // Com rotas (PQA-281), fechar o player volta à janela de detalhes de onde ele saiu (como no Jellyfin); Esc a fecha.
+  await page.waitForSelector(".detalhes");
+  await page.keyboard.press("Escape");
+  await page.waitForSelector(".detalhes", { state: "detached" });
 
   // Filmes: só filmes.
   await page.locator("#nav-bibliotecas .nav-item", { hasText: "Filmes" }).click();

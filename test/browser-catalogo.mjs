@@ -63,6 +63,10 @@ try {
   assert.equal(await page.locator(".detalhes").count(), 0, "detalhes fecham ao abrir o player");
   await page.mouse.move(700, 400); await page.locator("#player-close").click();
   await page.waitForFunction(() => document.querySelector("#player-modal").hidden);
+  // Com rotas (PQA-281), fechar o player volta à janela de detalhes de onde ele saiu (como no Jellyfin); Esc a fecha.
+  await page.waitForSelector(".detalhes");
+  await page.keyboard.press("Escape");
+  await page.waitForSelector(".detalhes", { state: "detached" });
 
   // Filmes: ordenar; busca.
   await page.locator("#nav-bibliotecas .nav-item", { hasText: "Filmes" }).click();

@@ -70,9 +70,8 @@ try {
   await admin.locator('[name="ServerName"]').fill("Cine do Sekiro");
   assert.equal(await salvar(admin), "Configurações salvas.");
   await admin.waitForFunction(() => document.title === "Cine do Sekiro");
-  // Recarregar volta ao Início; ao abrir o Painel de novo ele lembra a última tela (Geral) e relê do servidor.
-  await admin.reload(); await admin.waitForSelector(".titulo");
-  await admin.evaluate(() => document.querySelector("#painel-button").click());
+  // Recarregar continua em /painel/geral (rotas, PQA-281) e relê do servidor.
+  await admin.reload();
   await admin.waitForSelector('[name="ServerName"]');
   assert.equal(await admin.locator('[name="ServerName"]').inputValue(), "Cine do Sekiro", "relido depois de recarregar");
   assert.equal(await admin.title(), "Cine do Sekiro");

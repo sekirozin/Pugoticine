@@ -1,7 +1,8 @@
 import { icone } from "/icones.js";
 import { abrirPainel, fecharPainel } from "/painel.js";
 import { abrirOsd, definirDuracao, definirFonteDeInfo, fecharOsd } from "/player-osd.js";
-import { renderCatalogo } from "/inicio.js";
+import { renderCatalogo, abrirDetalhes, fecharDetalhes, detalhesAbertos, mostrarTemporada } from "/inicio.js";
+import { lerRota, enderecoDe, viewDe, rotaDaView, SOBREPOSTAS } from "/rotas.js";
 
 const state = {
   profile: null,
@@ -15,7 +16,11 @@ const state = {
   hls: null,
   usingHls: false,
   fallbackAttempted: false,
-  saveTimer: null
+  saveTimer: null,
+  rota: null,          // rota atual (public/rotas.js)
+  base: null,          // tela de fundo (não sobreposta) atual
+  baseDesenhada: null, // endereço da tela de fundo já desenhada
+  filtros: {}
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -69,7 +74,10 @@ function renderPainelView() {
     aoVarrer: (media) => { state.media = media; },
     aoMudarServidor: aplicarNomeServidor,
     // Cabeçalho do menu do Painel: volta ao app (o menu lateral normal reaparece).
-    voltarAoInicio: () => { state.view = "home"; state.query = ""; updateNavigation(); render(); recarregarCatalogo(); },
+    voltarAoInicio: () => { navegar({ tela: "inicio" }); recarregarCatalogo(); },
+    pagina: state.rota?.tela === "painel" ? state.rota.pagina : "painel",
+    irParaPagina: (pagina) => navegar({ tela: "painel", pagina }),
+    paginaInexistente: () => { history.replaceState(history.state, "", "/painel"); state.rota = { tela: "painel", pagina: "painel" }; state.base = state.rota; state.baseDesenhada = "/painel"; },
     fecharMenu: () => { if (innerWidth <= 700) toggleMenu(false); }
   });
 }
@@ -88,7 +96,15 @@ function render() {
   if (state.view === "painel") { renderPainelView(); return; }
   fecharPainel();
   // Catálogo no estilo de streaming (public/inicio.js): destaque, fileiras, cartões e janela de detalhes.
-  renderCatalogo(content, { media: state.media, bibliotecas: state.bibliotecas, view: state.view, query: state.query, progressFor, abrirPlayer: openPlayer, escapeHtml });
+  renderCatalogo(content, {
+    media: state.media, bibliotecas: state.bibliotecas, view: state.view, query: state.query, filtros: state.filtros, progressFor, escapeHtml,
+    // Cada ação vira um endereço (rotas.js); a tela muda quando a rota é aplicada.
+    abrirPlayer: (id) => navegar({ tela: "assistir", id }),
+    aoAbrirDetalhes: (id) => navegar({ tela: "titulo", id }),
+    aoFecharDetalhes: () => voltar(),
+    aoTrocarTemporada: (id, temporada) => navegar({ tela: "titulo", id, temporada }, { substituir: true }),
+    aoMudarFiltros: (filtros) => navegar({ ...state.base, genero: filtros.genero || undefined, ordem: filtros.ordem || undefined }, { substituir: true })
+  });
 }
 
 // Menu lateral: uma entrada por biblioteca, com o ícone do tipo (como "Minha mídia" do Jellyfin).
@@ -99,7 +115,10 @@ function renderNavBibliotecas() {
   if (!lista) return;
   lista.innerHTML = state.bibliotecas.map((b) => `<button class="nav-item" data-view="biblioteca:${escapeHtml(b.id)}" title="${escapeHtml(b.nome)}">${icone(ICONES_BIBLIOTECA[b.tipo] ?? ICONES_BIBLIOTECA.outro)}<span>${escapeHtml(b.nome)}</span></button>`).join("");
   if (state.view === "movies") state.view = `biblioteca:${state.bibliotecas.find((b) => b.tipo === "movies")?.id ?? "filmes"}`;
-  if (state.view.startsWith("biblioteca:") && !state.bibliotecas.some((b) => `biblioteca:${b.id}` === state.view)) state.view = "home";
+  if (state.view.startsWith("biblioteca:") && !state.bibliotecas.some((b) => `biblioteca:${b.id}` === state.view)) {
+    state.view = "home";
+    if (state.base?.tela === "biblioteca") navegar({ tela: "inicio" }, { substituir: true });
+  }
   updateNavigation();
 }
 /** Recarrega mídias e bibliotecas (ex.: ao sair do Painel depois de mexer nas bibliotecas). */
@@ -405,11 +424,10 @@ async function bootstrap() {
     aplicarNomeServidor();
     render();
     window.dispatchEvent(new CustomEvent("pugoticine:pronto"));
-    const requestedMedia = new URLSearchParams(location.search).get("play");
-    if (requestedMedia && state.media.some((item) => item.id === requestedMedia)) {
-      history.replaceState(null, "", location.pathname);
-      await openPlayer(requestedMedia);
-    }
+    // Entrada no app: sem marca, a página não foi aberta por ele (Voltar daqui sairia do Pugoticine); ao recarregar,
+    // a marca da entrada continua valendo.
+    if (!history.state || typeof history.state.pugoticine !== "boolean") history.replaceState({ pugoticine: false }, "", location.href);
+    await aplicarRota(lerRota(location.href));
   } catch (error) {
     content.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
   }
@@ -417,17 +435,22 @@ async function bootstrap() {
 
 $("#menu-toggle").addEventListener("click", () => toggleMenu());
 scrim.addEventListener("click", () => toggleMenu(false));
-$("#brand").addEventListener("click", () => { state.view = "home"; state.query = ""; $("#search").value = ""; updateNavigation(); render(); });
+$("#brand").addEventListener("click", () => navegar({ tela: "inicio" }));
 // Delegação: as entradas das bibliotecas são criadas depois de carregar.
 $("#sidebar").addEventListener("click", (event) => {
   const button = event.target.closest("nav [data-view]");
   if (!button) return;
-  state.view = button.dataset.view; state.query = ""; $("#search").value = ""; updateNavigation();
-  if (innerWidth <= 700) toggleMenu(false); render();
+  if (innerWidth <= 700) toggleMenu(false);
+  navegar(rotaDaView(button.dataset.view));
 });
-$("#search").addEventListener("input", (event) => { state.query = event.target.value; render(); });
+// Busca: /busca?q=… (digitar troca o endereço sem empilhar uma entrada por letra; apagar volta à tela anterior).
+$("#search").addEventListener("input", (event) => {
+  const q = event.target.value;
+  if (q.trim()) navegar({ tela: "busca", q }, { substituir: state.base?.tela === "busca" });
+  else if (state.base?.tela === "busca") navegar(state.antesDaBusca ?? { tela: "inicio" }, { substituir: true });
+});
 $("#logout").addEventListener("click", logout);
-$("#player-close").addEventListener("click", closePlayer);
+$("#player-close").addEventListener("click", () => voltar());
 $("#player-quality").addEventListener("change", reloadPlayback);
 $("#player-audio").addEventListener("change", reloadPlayback);
 $("#player-subtitle").addEventListener("change", () => trocarLegenda().catch((error) => { $("#player-status").textContent = error.message; }));
@@ -459,11 +482,85 @@ addEventListener("beforeunload", () => {
 
 // Ganchos para módulos externos (salas sincronizadas em salas.js): abrir/fechar o player e ler o catálogo.
 window.pugoticine = {
-  abrirPlayer: (id) => openPlayer(id),
-  fecharPlayer: () => closePlayer(),
+  abrirPlayer: (id) => navegar({ tela: "assistir", id }),
+  fecharPlayer: () => voltar(),
+  navegar: (rota, opcoes) => navegar(rota, opcoes),
+  voltar: () => voltar(),
+  rota: () => state.rota,
   midias: () => state.media,
   perfil: () => state.profile,
   midiaAberta: () => state.active?.id ?? null
 };
+
+// ---------- rotas ----------
+/** Vai para uma rota: grava o endereço no histórico (ou troca o atual) e aplica a tela. */
+function navegar(rota, { substituir = false } = {}) {
+  const endereco = enderecoDe(rota);
+  if (endereco !== location.pathname + location.search) {
+    if (substituir) history.replaceState({ pugoticine: Boolean(history.state?.pugoticine) }, "", endereco);
+    else history.pushState({ pugoticine: true }, "", endereco);
+  }
+  return aplicarRota(lerRota(endereco));
+}
+
+/** Fecha a tela sobreposta (player, detalhes, salas): volta no histórico se a página anterior é do app; senão
+ *  troca o endereço pela tela de fundo (quem abriu o link direto não sai do Pugoticine). */
+function voltar() {
+  if (history.state?.pugoticine) { history.back(); return Promise.resolve(); }
+  return navegar(state.base ?? { tela: "inicio" }, { substituir: true });
+}
+
+/** Mostra a tela de uma rota: tela de fundo (Início, biblioteca, busca, Painel) e, por cima, detalhes/player/salas. */
+async function aplicarRota(rota) {
+  if (rota.desconhecida || rota.antiga) {
+    // Endereço inexistente vira o Início; endereço antigo (?play=, ?sala=) vira o novo.
+    const { desconhecida, antiga, ...limpa } = rota;
+    history.replaceState(history.state, "", enderecoDe(limpa));
+    rota = limpa;
+  }
+  if (rota.tela === "painel" && state.profile?.role !== "admin") return navegar({ tela: "inicio" }, { substituir: true });
+  if (rota.tela === "biblioteca" && !state.bibliotecas.some((b) => b.id === rota.biblioteca)) {
+    toast("Biblioteca não encontrada.");
+    return navegar({ tela: "inicio" }, { substituir: true });
+  }
+  state.rota = rota;
+
+  // Tela de fundo: muda só quando o endereço dela muda (abrir detalhes/player não redesenha o catálogo).
+  if (!SOBREPOSTAS.has(rota.tela) || !state.base) {
+    const base = SOBREPOSTAS.has(rota.tela) ? { tela: "inicio" } : rota;
+    if (base.tela !== "busca") state.antesDaBusca = base;
+    state.base = base;
+    const endereco = enderecoDe(base);
+    if (endereco !== state.baseDesenhada) {
+      state.baseDesenhada = endereco;
+      state.view = viewDe(base);
+      state.query = base.tela === "busca" ? base.q : "";
+      state.filtros = base.tela === "biblioteca" ? { genero: base.genero ?? "", ordem: base.ordem ?? "titulo" } : {};
+      if ($("#search").value !== state.query) $("#search").value = state.query;
+      updateNavigation();
+      render();
+    }
+  }
+
+  // Detalhes de um filme ou série.
+  if (rota.tela === "titulo") {
+    if (detalhesAbertos() !== rota.id) {
+      if (!abrirDetalhes(rota.id, rota.temporada)) { toast("Título não encontrado."); return navegar(state.base, { substituir: true }); }
+    } else if (rota.temporada !== undefined) mostrarTemporada(rota.temporada);
+  } else if (detalhesAbertos()) fecharDetalhes();
+
+  // Player.
+  if (rota.tela === "assistir") {
+    if (state.active?.id !== rota.id) {
+      if (!state.media.some((item) => item.id === rota.id)) { toast("Título não encontrado."); return navegar(state.base, { substituir: true }); }
+      await openPlayer(rota.id);
+    }
+  } else if (state.active) await closePlayer();
+
+  // Salas (salas.js mostra ou esconde a janela pela rota).
+  window.dispatchEvent(new CustomEvent("pugoticine:rota", { detail: rota }));
+}
+
+addEventListener("popstate", () => { aplicarRota(lerRota(location.href)).catch((error) => console.error(error)); });
 
 bootstrap();
