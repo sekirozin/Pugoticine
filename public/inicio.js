@@ -6,6 +6,8 @@ import { icone } from "/icones.js";
 const ICONE_PLAY = icone("player-play-cheio", "icone-cheio");
 const ICONE_INFO = icone("info-circle", "icone-cheio");
 const ICONE_FECHAR = icone("x", "icone-cheio");
+const ICONE_VISTO = icone("circle-check-cheio", "icone-cheio");
+const ICONE_MARCAR = icone("circle-check", "icone-cheio");
 const SETA = (lado) => icone(lado === "esquerda" ? "chevron-left" : "chevron-right", "icone-cheio");
 
 let ctx = null;
@@ -91,6 +93,16 @@ function aSeguir(series) {
 const rotuloEpisodio = (e) => `T${e.serie.temporada}E${String(e.serie.episodio).padStart(2, "0")}${e.serie.episodioFinal ? `-E${String(e.serie.episodioFinal).padStart(2, "0")}` : ""}`;
 const nomeEpisodio = (e) => e.serie.nomeEpisodio || `Episódio ${e.serie.episodio}`;
 const playDe = (entrada) => entrada.ehSerie ? proximoEpisodio(entrada) : entrada;
+/** Obra assistida: filme ou episódio concluído; série com todos os episódios concluídos. */
+const assistida = (entrada) => entrada.ehSerie ? entrada.episodios.every(concluido) : concluido(entrada);
+/** Recomendações (destaque, fileiras, parecidos) mostram só o que ainda não foi assistido. */
+const naoAssistidas = (entradas) => entradas.filter((e) => !assistida(e));
+/** Botão "Marcar como assistido" / "Assistido" (alterna), para um filme, episódio, temporada ou série. */
+function botaoAssistido(ids, marcado, rotulo = "", classe = "botao-marcar") {
+  const texto = marcado ? "Assistido" : "Marcar como assistido";
+  const titulo = marcado ? `Desmarcar${rotulo ? ` ${rotulo}` : ""} como assistido` : `Marcar${rotulo ? ` ${rotulo}` : ""} como assistido`;
+  return `<button type="button" class="${classe}${marcado ? " marcado" : ""}" data-assistido="${ids.join(",")}" data-valor="${marcado ? "0" : "1"}" aria-pressed="${marcado}" title="${escapar(titulo)}" aria-label="${escapar(titulo)}">${marcado ? ICONE_VISTO : ICONE_MARCAR}${classe === "botao-marcar" ? `<span>${texto}</span>` : ""}</button>`;
+}
 function contagemSerie(s) {
   const t = s.temporadas.length, e = s.episodios.length;
   return `${t} ${t === 1 ? "temporada" : "temporadas"} · ${e} ${e === 1 ? "episódio" : "episódios"}`;
@@ -115,7 +127,7 @@ function cartao(item, formato = "poster") {
     <button type="button" class="titulo-capa" data-detalhes="${detalhesId}" aria-label="${escapar(nome)}: mais informações">
       ${largo ? imagem(item, item.serie ? "cena" : "fundo", item.serie ? [780, 1280] : [780, 1280], "(max-width: 700px) 70vw, 340px", "titulo-img") : imagem(item, "poster", [185, 342, 500], "(max-width: 700px) 40vw, 180px", "titulo-img")}
       <span class="titulo-nome-reserva">${escapar(item.title)}</span>
-      ${item.ehSerie ? `<span class="titulo-selo">${item.episodios.length}</span>` : ""}
+      ${assistida(item) ? `<span class="titulo-visto" title="Assistido">${ICONE_VISTO}<span class="visualmente-oculto">Assistido</span></span>` : item.ehSerie ? `<span class="titulo-selo">${item.episodios.length}</span>` : ""}
       ${andamento ? `<span class="titulo-progresso"><span style="width:${percentual(alvo).toFixed(1)}%"></span></span>` : ""}
     </button>
     <div class="titulo-painel">
@@ -180,11 +192,13 @@ function telaInicio(media) {
   const continuar = media.filter(emAndamento).sort((a, b) => (ctx.progressFor(b.id).updatedAt || "").localeCompare(ctx.progressFor(a.id).updatedAt || ""));
   const { entradas, series } = ctx.dados;
   const generos = new Map();
-  for (const item of entradas) for (const g of item.metadata?.genres ?? []) generos.set(g, [...(generos.get(g) ?? []), item]);
+  // Recomendações só com o que ainda não foi assistido (séries: enquanto houver episódio por ver).
+  const recomendaveis = naoAssistidas(entradas);
+  for (const item of recomendaveis) for (const g of item.metadata?.genres ?? []) generos.set(g, [...(generos.get(g) ?? []), item]);
   const porGenero = [...generos.entries()].filter(([, itens]) => itens.length >= 2).sort((a, b) => b[1].length - a[1].length).slice(0, 6);
   // Uma fileira por biblioteca, na ordem do Painel (como "Adicionados recentemente em …" do Jellyfin).
-  const porBiblioteca = bibliotecas().map((b) => [b, entradas.filter((e) => e.bibliotecaId === b.id).sort(porData).slice(0, 24)]);
-  return destaque(escolherDestaque(entradas))
+  const porBiblioteca = bibliotecas().map((b) => [b, recomendaveis.filter((e) => e.bibliotecaId === b.id).sort(porData).slice(0, 24)]);
+  return destaque(escolherDestaque(recomendaveis))
     + `<div class="fileiras">`
     + fileira("Continuar assistindo", continuar, "largo")
     + fileira("A seguir", aSeguir(series), "largo")
@@ -242,20 +256,20 @@ function listaEpisodios(serie, temporada) {
         ${andamento ? `<span class="titulo-progresso"><span style="width:${percentual(e).toFixed(1)}%"></span></span>` : ""}
       </button>
       <div class="episodio-info">
-        <h4><span>${e.serie.episodio}${e.serie.episodioFinal ? `–${e.serie.episodioFinal}` : ""}.</span> ${escapar(nomeEpisodio(e))}</h4>
+        <h4><span>${e.serie.episodio}${e.serie.episodioFinal ? `–${e.serie.episodioFinal}` : ""}.</span> ${escapar(nomeEpisodio(e))}${botaoAssistido([e.id], visto, rotuloEpisodio(e), "episodio-marcar")}</h4>
         <p>${escapar(rotuloEpisodio(e))}${e.metadata?.runtime ? ` · ${escapar(duracaoTexto(e.metadata.runtime))}` : ""}${andamento ? ` · ${escapar(restante(ctx.progressFor(e.id)))}` : visto ? " · Assistido" : ""}</p>
         ${e.metadata?.episodeOverview ? `<p class="episodio-sinopse">${escapar(e.metadata.episodeOverview)}</p>` : ""}
       </div>
     </article>`;
   }).join("");
 }
-function abrirDetalhesSerie(serie) {
+function abrirDetalhesSerie(serie, temporadaEscolhida) {
   fecharDetalhes();
   ctx.focoAnterior = document.activeElement;
   const proximo = proximoEpisodio(serie);
   const andamento = emAndamento(proximo);
-  const temporada = proximo.serie.temporada;
-  const outras = ctx.dados.entradas.filter((x) => x.id !== serie.id && x.bibliotecaId === serie.bibliotecaId).slice(0, 12);
+  const temporada = serie.temporadas.includes(temporadaEscolhida) ? temporadaEscolhida : proximo.serie.temporada;
+  const outras = naoAssistidas(ctx.dados.entradas.filter((x) => x.id !== serie.id && x.bibliotecaId === serie.bibliotecaId)).slice(0, 12);
   document.body.insertAdjacentHTML("beforeend", `<div class="detalhes" role="dialog" aria-modal="true" aria-label="${escapar(serie.title)}" data-serie="${serie.id}">
     <div class="detalhes-caixa">
       <button type="button" class="detalhes-fechar" data-fechar-detalhes aria-label="Fechar">${ICONE_FECHAR}</button>
@@ -266,6 +280,7 @@ function abrirDetalhesSerie(serie) {
           <h2>${escapar(serie.title)}</h2>
           <div class="destaque-botoes">
             <button type="button" class="botao-assistir" data-play="${proximo.id}">${ICONE_PLAY}<span>${andamento ? "Continuar" : "Assistir"} ${escapar(rotuloEpisodio(proximo))}</span><span class="visualmente-oculto"> ${escapar(serie.title)}</span></button>
+            ${botaoAssistido(serie.episodios.map((e) => e.id), assistida(serie), "a série")}
           </div>
           ${andamento ? `<div class="destaque-progresso"><span style="width:${percentual(proximo).toFixed(1)}%"></span></div><p class="destaque-restante">${escapar(restante(ctx.progressFor(proximo.id)))}</p>` : ""}
         </div>
@@ -285,6 +300,7 @@ function abrirDetalhesSerie(serie) {
       </div>
       <div class="temporadas">
         <div class="temporadas-abas" role="tablist">${serie.temporadas.map((n) => `<button type="button" role="tab" class="temporada-aba${n === temporada ? " ativa" : ""}" aria-selected="${n === temporada}" data-temporada="${n}">${n === 0 ? "Especiais" : `Temporada ${n}`}</button>`).join("")}</div>
+        <div class="temporada-acoes">${botaoTemporada(serie, temporada)}</div>
         <div class="episodios" role="list">${listaEpisodios(serie, temporada)}</div>
       </div>
       ${outras.length ? `<div class="detalhes-parecidos"><h3>Mais em ${escapar(serie.bibliotecaNome)}</h3><div class="grade grade-poster" role="list">${outras.map((x) => cartao(x)).join("")}</div></div>` : ""}
@@ -293,6 +309,10 @@ function abrirDetalhesSerie(serie) {
   document.body.classList.add("detalhes-aberto");
   document.querySelector(".detalhes .botao-assistir")?.focus();
 }
+function botaoTemporada(serie, n) {
+  const episodios = serie.episodios.filter((e) => e.serie.temporada === n);
+  return botaoAssistido(episodios.map((e) => e.id), episodios.every(concluido), n === 0 ? "os especiais" : `a temporada ${n}`);
+}
 function trocarTemporada(botao) {
   const janela = botao.closest(".detalhes");
   const serie = ctx.dados.series.get(janela?.dataset.serie);
@@ -300,20 +320,22 @@ function trocarTemporada(botao) {
   const n = Number(botao.dataset.temporada);
   janela.querySelectorAll(".temporada-aba").forEach((b) => { const ativa = b === botao; b.classList.toggle("ativa", ativa); b.setAttribute("aria-selected", String(ativa)); });
   janela.querySelector(".episodios").innerHTML = listaEpisodios(serie, n);
+  janela.querySelector(".temporada-acoes").innerHTML = botaoTemporada(serie, n);
 }
-export function abrirDetalhes(id) {
+export function abrirDetalhes(id, temporada) {
   const serie = ctx.dados.series.get(id);
-  if (serie) { abrirDetalhesSerie(serie); return; }
+  if (serie) { abrirDetalhesSerie(serie, temporada); return; }
   const item = ctx.media.find((m) => m.id === id);
   if (!item) return;
   fecharDetalhes();
   ctx.focoAnterior = document.activeElement;
   const m = item.metadata || {};
   const andamento = emAndamento(item);
-  const parecidos = ctx.dados.entradas.filter((x) => x.id !== item.id && (x.metadata?.genres ?? []).some((g) => (m.genres ?? []).includes(g))).slice(0, 12);
-  const extras = parecidos.length ? parecidos : ctx.dados.entradas.filter((x) => x.id !== item.id && x.bibliotecaId === item.bibliotecaId).slice(0, 12);
+  const candidatos = naoAssistidas(ctx.dados.entradas.filter((x) => x.id !== item.id));
+  const parecidos = candidatos.filter((x) => (x.metadata?.genres ?? []).some((g) => (m.genres ?? []).includes(g))).slice(0, 12);
+  const extras = parecidos.length ? parecidos : candidatos.filter((x) => x.bibliotecaId === item.bibliotecaId).slice(0, 12);
   const linha = (rotulo, valor) => valor ? `<p><span>${rotulo}:</span> ${escapar(valor)}</p>` : "";
-  document.body.insertAdjacentHTML("beforeend", `<div class="detalhes" role="dialog" aria-modal="true" aria-label="${escapar(item.title)}">
+  document.body.insertAdjacentHTML("beforeend", `<div class="detalhes" role="dialog" aria-modal="true" aria-label="${escapar(item.title)}" data-item="${item.id}">
     <div class="detalhes-caixa">
       <button type="button" class="detalhes-fechar" data-fechar-detalhes aria-label="Fechar">${ICONE_FECHAR}</button>
       <div class="detalhes-topo">
@@ -323,6 +345,7 @@ export function abrirDetalhes(id) {
           <h2>${escapar(item.title)}</h2>
           <div class="destaque-botoes">
             <button type="button" class="botao-assistir" data-play="${item.id}">${ICONE_PLAY}<span>${andamento ? "Continuar" : "Assistir"}</span><span class="visualmente-oculto"> ${escapar(item.title)}</span></button>
+            ${botaoAssistido([item.id], concluido(item), item.serie ? rotuloEpisodio(item) : "o filme")}
           </div>
           ${andamento ? `<div class="destaque-progresso"><span style="width:${percentual(item).toFixed(1)}%"></span></div><p class="destaque-restante">${escapar(restante(ctx.progressFor(item.id)))}</p>` : ""}
         </div>
@@ -384,6 +407,26 @@ function atualizarSetas(raiz) {
   });
 }
 
+// Marca/desmarca (app.js grava no servidor e redesenha o catálogo); a janela aberta é redesenhada no mesmo ponto.
+async function alternarAssistido(botao) {
+  if (!ctx.marcarAssistido || botao.disabled) return;
+  const janela = botao.closest(".detalhes");
+  const ids = botao.dataset.assistido.split(",").filter(Boolean);
+  const valor = botao.dataset.valor === "1";
+  const caixa = janela?.querySelector(".detalhes-caixa");
+  const rolagem = caixa?.scrollTop ?? 0;
+  const temporada = Number(janela?.querySelector(".temporada-aba.ativa")?.dataset.temporada);
+  const idJanela = janela?.dataset.serie || janela?.dataset.item;
+  botao.disabled = true;
+  try { await ctx.marcarAssistido(ids, valor); }
+  catch (erro) { botao.disabled = false; ctx.toast?.(erro.message); return; }
+  if (!idJanela) return;
+  abrirDetalhes(idJanela, Number.isFinite(temporada) ? temporada : undefined);
+  const nova = document.querySelector(".detalhes .detalhes-caixa");
+  if (nova) nova.scrollTop = rolagem;
+  document.querySelector(`.detalhes [data-assistido="${CSS.escape(botao.dataset.assistido)}"]`)?.focus();
+}
+
 let ligado = false;
 function ligar(conteudo) {
   if (ligado) return;
@@ -392,6 +435,8 @@ function ligar(conteudo) {
   document.addEventListener("click", (evento) => {
     const alvo = evento.target instanceof Element ? evento.target : null;
     if (!alvo) return;
+    const marcar = alvo.closest("[data-assistido]");
+    if (marcar && marcar.closest(".detalhes")) { evento.preventDefault(); alternarAssistido(marcar); return; }
     const play = alvo.closest("[data-play]");
     if (play && (conteudo.contains(play) || play.closest(".detalhes"))) {
       evento.preventDefault();

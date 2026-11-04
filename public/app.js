@@ -88,7 +88,15 @@ function render() {
   if (state.view === "painel") { renderPainelView(); return; }
   fecharPainel();
   // Catálogo no estilo de streaming (public/inicio.js): destaque, fileiras, cartões e janela de detalhes.
-  renderCatalogo(content, { media: state.media, bibliotecas: state.bibliotecas, view: state.view, query: state.query, progressFor, abrirPlayer: openPlayer, escapeHtml });
+  renderCatalogo(content, { media: state.media, bibliotecas: state.bibliotecas, view: state.view, query: state.query, progressFor, abrirPlayer: openPlayer, escapeHtml, marcarAssistido, toast });
+}
+
+// "Marcar como assistido" (filme, episódio, temporada ou série): grava no servidor e redesenha as recomendações.
+async function marcarAssistido(ids, assistido) {
+  const data = await api("/api/progress/assistido", { method: "POST", body: JSON.stringify({ mediaIds: ids, assistido }) });
+  for (const item of data.progress) state.progress.set(item.mediaId, item);
+  render();
+  toast(assistido ? "Marcado como assistido." : "Desmarcado como assistido.");
 }
 
 // Menu lateral: uma entrada por biblioteca, com o ícone do tipo (como "Minha mídia" do Jellyfin).

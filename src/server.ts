@@ -251,6 +251,17 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<voi
     return;
   }
 
+  // Marcar/desmarcar como assistido: filme, episódio, temporada ou série inteira (o cliente manda os episódios).
+  if (url.pathname === "/api/progress/assistido" && req.method === "POST") {
+    const input = await body<{ mediaIds?: unknown; assistido?: unknown }>(req);
+    const ids = Array.isArray(input.mediaIds) ? input.mediaIds.map(String) : [];
+    if (!ids.length || ids.length > 5000 || typeof input.assistido !== "boolean") { json(res, 400, { error: "Informe mediaIds (lista) e assistido (verdadeiro ou falso)." }); return; }
+    const medias = ids.map((id) => visivel(profile, catalog.get(id)));
+    if (medias.some((m) => !m)) { json(res, 404, { error: "Mídia não encontrada." }); return; }
+    json(res, 200, { progress: store.marcarAssistido(profile.username, medias.map((m) => m!.id), input.assistido) });
+    return;
+  }
+
   const imagemMatch = url.pathname.match(/^\/api\/media\/([a-f0-9]{24})\/imagem\/(poster|fundo|cena)$/);
   if (imagemMatch && req.method === "GET") {
     const base = visivel(profile, catalog.get(imagemMatch[1]));
