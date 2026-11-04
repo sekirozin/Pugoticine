@@ -1,19 +1,6 @@
 @layer pugoticine-temas {
-/* O modo define o fundo; a paleta define somente o destaque. */
-:root{--tema-particula:96,165,250;--tema-brilho:224,242,254}
-:root[data-tema="1"]{--primary:#263dbb;--tema-particula:38,61,187}
-:root[data-tema="2"]{--primary:#c8ff00;--tema-particula:200,255,0}
-:root[data-tema="3"]{--primary:#ff5825;--tema-particula:255,88,37}
-:root[data-tema="4"]{--primary:#ff606a;--tema-particula:255,96,106}
-:root[data-modo="escuro"]{--bg:#101010;--surface:#171717;--surface-2:#242424;--border:#393939;--text:#fff;--muted:#b8b8b8;--tema-campo:#202020;--tema-brilho:255,255,255;color-scheme:dark}
-:root[data-modo="claro"]{--bg:#f5f5f5;--surface:#fff;--surface-2:#e9e9e9;--border:#c6c6c6;--text:#181818;--muted:#555;--tema-campo:#fff;--tema-brilho:24,24,24;color-scheme:light}
-:root[data-tema][data-modo]{--primary-hover:color-mix(in srgb,var(--primary),white 18%);--tema-sobre-destaque:#101010;--tema-selecao:color-mix(in srgb,var(--primary) 17%,var(--bg));--tema-borda-destaque:color-mix(in srgb,var(--primary),var(--bg) 40%)}
-:root[data-tema="1"][data-modo]{--tema-sobre-destaque:#fff}
-.tema-preferencia{display:grid;gap:7px;padding-top:12px;margin-top:4px;border-top:1px solid var(--border);font-size:14px}
-.tema-preferencia select{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);font:inherit;cursor:pointer}
-.tema-preferencia select:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
-#tema-status{font-size:12px;line-height:1.4;color:var(--muted)}
-#tema-status:empty{display:none}
+/* Paleta Lima única. Fundo e superfícies constantes em todos os navegadores. */
+:root[data-tema="2"]{--bg:#101010;--surface:#171717;--surface-2:#242424;--border:#393939;--text:#fff;--muted:#b8b8b8;--primary:#c8ff00;--primary-hover:#dcff5c;--tema-campo:#202020;--tema-particula:200,255,0;--tema-brilho:255,255,255;--tema-sobre-destaque:#101010;--tema-selecao:#303b15;--tema-borda-destaque:#718d12;color-scheme:dark}
 /* :where mantém a especificidade baixa; a folha vem depois dos estilos originais. */
 html:where([data-tema]) :is(.topbar,.sidebar){background:var(--surface);border-color:var(--border)}
 html:where([data-tema]) :is(.profile-menu,.toast,.salas-caixa,.detalhes-caixa,.detalhes-fechar,.painel-usuario,.painel-registro,.painel-contagens div,.painel-filtro){background:var(--surface);color:var(--text);border-color:var(--border)}

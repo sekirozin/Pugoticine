@@ -45,3 +45,11 @@ Decisão do usuário: os quatro temas compartilham fundo #101010 no modo escuro;
 ## Último handoff atualizado
 
 Codex, 2026-11-04: quatro paletas separadas da aparência clara/escura; oito combinações testadas; próximo publicar no Docker local.
+
+## Decisão substituída — 04/11/2026
+
+O usuário rejeitou os quatro temas e os modos claro/escuro. A decisão vigente é uma única paleta Lima como padrão: fundo #101010, texto #FFFFFF, destaque #C8FF00. O menu Perfil não mostra seletores; preferências antigas são removidas do navegador. Os testes PQA-270/271 foram atualizados para esse comportamento, e PQA-272 documenta a substituição dos modos. Próximo: validar imagem e publicar no ZimaOS com backup e reversão.
+
+## Último handoff atualizado
+
+Codex, 2026-11-04: paleta Lima única e padrão pronta e testada em desktop/celular; próximo deploy seguro no ZimaOS.
