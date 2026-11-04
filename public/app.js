@@ -30,7 +30,7 @@ function escapeHtml(value) {
   })[char]);
 }
 
-// O servidor informa o endereço de login (PUGOTILAB_LOGIN_URL); sem ele, o PugotiLab de produção.
+// O servidor informa o endereço de login (PUGOTILAB_LOGIN_URL); sem ele, o Pugotilab de produção.
 function login(loginUrl = "https://pugotilab.com/auth") {
   location.assign(`${loginUrl}?return=${encodeURIComponent(location.href)}`);
 }
@@ -83,7 +83,7 @@ async function aplicarNomeServidor() {
 }
 
 function render() {
-  // Painel só para administradores do PugotiLab (o servidor também recusa com 403); qualquer outro volta ao Início.
+  // Painel só para administradores do Pugotilab (o servidor também recusa com 403); qualquer outro volta ao Início.
   if (state.view === "painel" && state.profile?.role !== "admin") { state.view = "home"; updateNavigation(); }
   if (state.view === "painel") { renderPainelView(); return; }
   fecharPainel();

@@ -16,7 +16,7 @@ try {
   page.on("pageerror", (e) => erros.push(String(e)));
   const dados = await (await page.request.get(`${BASE}/api/bootstrap`)).json();
   const godfather = dados.media.find((m) => m.metadata?.originalTitle === "The Godfather");
-  assert.ok(godfather, "TMDB ativo: suba o container com TMDB_READ_TOKEN (mesma chave do PugotiList)");
+  assert.ok(godfather, "TMDB ativo: suba o container com TMDB_READ_TOKEN (mesma chave do Pugotilist)");
   assert.equal(godfather.title, "O Poderoso Chefão");
   assert.ok(godfather.metadata.overview.length > 40, "sinopse");
   assert.match(godfather.metadata.posterUrl, /^https:\/\/image\.tmdb\.org\/t\/p\/w780\//);

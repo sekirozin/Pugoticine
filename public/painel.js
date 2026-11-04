@@ -260,8 +260,8 @@ function editarUsuario(alvo, u, voce) {
   const area = alvo.querySelector("[data-painel-editar-usuario]");
   area.innerHTML = `<form class="painel-form" data-form-usuario><section class="painel-cartao"><h3>Editar usuário: ${e(u.nome)}</h3>
     ${u.desativado ? '<p class="painel-aviso painel-aviso-salvo">Este usuário está desativado atualmente</p>' : ""}
-    <label class="painel-campo"><span>Nome</span><input value="${e(u.nome)}" disabled></label><small class="painel-ajuda">Nome, senha e imagem são da conta do PugotiLab.</small>
-    <label class="painel-campo painel-check"><input type="checkbox" disabled ${u.papel === "admin" ? "checked" : ""}><span>Permitir que este usuário gerencie o servidor</span></label><small class="painel-ajuda">Definido pelo PugotiLab.</small>
+    <label class="painel-campo"><span>Nome</span><input value="${e(u.nome)}" disabled></label><small class="painel-ajuda">Nome, senha e imagem são da conta do Pugotilab.</small>
+    <label class="painel-campo painel-check"><input type="checkbox" disabled ${u.papel === "admin" ? "checked" : ""}><span>Permitir que este usuário gerencie o servidor</span></label><small class="painel-ajuda">Definido pelo Pugotilab.</small>
     <h3>Acesso aos Recursos</h3>
     <label class="painel-campo painel-check"><input type="checkbox" name="desativado" ${u.desativado ? "checked" : ""} ${u.usuario === voce ? "disabled" : ""}><span>Desativar este usuário</span></label><small class="painel-ajuda">Tem efeito: o usuário desativado não consegue usar o Pugoticine.</small>
     <label class="painel-campo painel-check"><input type="checkbox" name="oculto" ${u.oculto ? "checked" : ""}><span>Ocultar este usuário das telas de login</span></label>
@@ -415,7 +415,7 @@ async function telaTvAoVivo(alvo, cabecalho) {
 
 function listaPlugins() {
   const integracoes = [
-    ["Login do PugotiLab", "Contas, senhas e sessões vêm do PugotiLab (no Jellyfin seria um plugin de autenticação)."],
+    ["Login do Pugotilab", "Contas, senhas e sessões vêm do Pugotilab (no Jellyfin seria um plugin de autenticação)."],
     ["Metadados do Radarr", "Sinopse, pôster, notas e classificação dos filmes (no Jellyfin seriam os plugins TMDb/OMDb)."],
     ["Nomes de séries e animes", "Temporada e episódio pelas regras de nomes do Jellyfin."]
   ];

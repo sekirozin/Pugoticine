@@ -261,7 +261,7 @@
           <button class="sala-botao" data-sala-assistir ${s.reproducao.mediaId ? "" : "disabled"}>Assistir com a sala</button>
           <h4>Na sala agora (${s.membros.length})</h4>
           <div class="sala-pessoas">${s.membros.map((m) => `<span class="sala-pessoa">${esc(m.nome)}</span>`).join("") || "<em>Ninguém conectado</em>"}</div>
-          ${s.souDono ? `<h4>Convidar pessoas do PugotiLab</h4>
+          ${s.souDono ? `<h4>Convidar pessoas do Pugotilab</h4>
             <form class="sala-linha" data-sala-convidar><input name="usuarios" placeholder="usuários, separados por vírgula" required><button class="sala-botao">Convidar</button></form>
             <p class="sala-ajuda">Convidados: ${s.convidados.length ? s.convidados.map((u) => `@${esc(u)}`).join(", ") : "ninguém ainda"}</p>
             <p class="sala-ajuda">Link de convite: <input readonly value="${esc(link)}" data-sala-link></p>

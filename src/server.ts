@@ -44,7 +44,7 @@ if (restaurado) bancoPainel.registrar("BackupRestored", `Backup restaurado: ${re
 const raizesPermitidas = (process.env.PUGOTICINE_PASTAS_PERMITIDAS ?? "/media").split(",").map(r => path.resolve(r.trim())).filter(Boolean);
 const catalog = new GerenciadorBibliotecas(bancoPainel.db, config.mediaRoot, raizesPermitidas, () => { lastScanAt = new Date().toISOString(); });
 const store = new Store(config.dbFile);
-// Metadados em português do TMDB (mesma chave do PugotiList), por cima do Radarr. Sem chave, só Radarr.
+// Metadados em português do TMDB (mesma chave do Pugotilist), por cima do Radarr. Sem chave, só Radarr.
 const tmdb = config.tmdbToken ? new Tmdb(config.tmdbToken, path.join(config.dataDir, "tmdb-cache.json"), config.tmdbApiUrl) : null;
 const metadata = new MetadataCatalog(tmdb);
 // Organizador: downloads feitos à mão no Transmission vão para Filmes/Séries/Animes via Radarr/Sonarr.
@@ -144,7 +144,7 @@ async function body<T>(req: IncomingMessage): Promise<T> {
 }
 
 async function authenticated(req: IncomingMessage, res: ServerResponse): Promise<PugotiProfile | null> {
-  // Sem sessão do PugotiLab, vale uma chave do Painel › Chaves da API (acesso de administrador).
+  // Sem sessão do Pugotilab, vale uma chave do Painel › Chaves da API (acesso de administrador).
   const profile = await getProfile(req) ?? painel.perfilPorChave(req);
   if (!profile) json(res, 401, { error: "Entre com sua conta Pugotilab.", loginUrl: config.pugotilabLoginUrl });
   return profile;

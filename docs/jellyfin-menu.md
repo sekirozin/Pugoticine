@@ -16,7 +16,7 @@ Legenda: ✅ existe no Pugoticine · 🟡 parcial · ❌ não existe.
 | Mídia: Filmes / Séries / Animes | uma entrada por biblioteca (`/Library/VirtualFolders`) | 🟡 o catálogo já é a soma das bibliotecas do Painel (cada item tem `bibliotecaId`/`bibliotecaNome`); uma entrada por biblioteca no menu principal fica para quem cuida do menu |
 | Administração: Painel | `web/apps/dashboard` (rotas em `web/apps/dashboard/routes/_asyncRoutes.ts:5-34`); `AppLayout.tsx`/`AppDrawer.tsx` (gaveta de 240 px) | ✅ como no Jellyfin: o menu do Painel substitui o menu lateral (240 px no computador, gaveta no celular); o topo da gaveta volta ao Início (PQA-234) |
 | Administração: Gerenciador de Metadados | `web/apps/dashboard/routes/routes.tsx:42` (`edititemmetadata`) + `web/components/metadataEditor/` | ❌ |
-| Usuário: Configurações | `web/apps/stable/routes/user/settings/index.tsx` + `web/controllers/user/{display,home,playback,subtitles,controls}` | ❌ (perfil é do PugotiLab) |
+| Usuário: Configurações | `web/apps/stable/routes/user/settings/index.tsx` + `web/controllers/user/{display,home,playback,subtitles,controls}` | ❌ (perfil é do Pugotilab) |
 | Sair | encerra a sessão | ✅ |
 
 ## Painel (Administração)
@@ -28,7 +28,7 @@ Rodada 3 (03/11/2026). Toda tela mostra no topo o que tem efeito; o que só é s
 | Painel (visão geral) | `SystemController`, `LibraryController.GetItemCounts`, `SessionController` | servidor, versão, contagens, discos, atividade, tarefas, bibliotecas reais | reiniciar/desligar (Docker) |
 | Geral | `ServerConfiguration` | nome do servidor (título e Painel) | idioma, caminhos, Quick Connect, rendimento |
 | ~~Marca~~ | `BrandingOptions` | removida (04/11/2026) | — |
-| Usuários | `UserController`, `UserPolicy` | lista de quem entrou; ativo/desativado; acesso por biblioteca; classificação etária máxima; bloquear sem classificação (lista e rotas de mídia) | ocultar, bitrate, sessões, salas; nome/senha/login são do PugotiLab |
+| Usuários | `UserController`, `UserPolicy` | lista de quem entrou; ativo/desativado; acesso por biblioteca; classificação etária máxima; bloquear sem classificação (lista e rotas de mídia) | ocultar, bitrate, sessões, salas; nome/senha/login são do Pugotilab |
 | Bibliotecas | `LibraryStructureController`, `LibraryController.RefreshLibrary` | adicionar/editar/remover, tipo, várias pastas (seletor dentro de `PUGOTICINE_PASTAS_PERMITIDAS`), ativar, monitoramento em tempo real, rastrear cada uma ou todas; séries/animes com nome de episódio | idioma/país e atualização automática de metadados; Música e Livros (só vídeo) |
 | Bibliotecas › Exibição / Metadados / NFO | `routes/libraries/{display,metadata,nfo}` | — | tudo salvo (metadados vêm do Radarr) |
 | Reprodução › Transcodificação | `EncodingOptions` | aplicado pelo player (braço 1, `7e79edf`) | parte dos campos |
@@ -59,7 +59,7 @@ Rodada 3 (03/11/2026). Toda tela mostra no topo o que tem efeito; o que só é s
 
 | Tela | O que guarda | Web | Servidor | Pugoticine |
 |---|---|---|---|---|
-| Perfil | nome, senha, imagem | `web/apps/stable/routes/user/userprofile.tsx` | `UserController.cs` | ✅ no PugotiLab (link "Perfil") |
+| Perfil | nome, senha, imagem | `web/apps/stable/routes/user/userprofile.tsx` | `UserController.cs` | ✅ no Pugotilab (link "Perfil") |
 | Exibição | idioma, formato de data, tema, telas | `web/controllers/user/display` | `DisplayPreferencesController.cs:114` | ❌ |
 | Início | quais seções aparecem e em que ordem | `web/controllers/user/home` | `DisplayPreferencesController` | ❌ |
 | Reprodução | idioma de áudio preferido, faixa padrão, lembrar áudio e legenda, próximo episódio automático, qualidade máxima, canais de áudio, normalização, pular ±N s, modo cinema | `web/components/playbackSettings/playbackSettings.js:277-318` (`AudioLanguagePreference`, `PlayDefaultAudioTrack`, `RememberAudioSelections`, `RememberSubtitleSelections`, `EnableNextEpisodeAutoPlay`, `allowedAudioChannels`, `skipForwardLength`, `skipBackLength`…) | `UserController.cs:492` (`UpdateUserConfiguration`) | ❌ (o player escolhe por sessão) |
@@ -68,12 +68,12 @@ Rodada 3 (03/11/2026). Toda tela mostra no topo o que tem efeito; o que só é s
 
 ## Plano por fases (braço 2)
 
-Prioridade: o que dá valor já com o app atual (filmes, progresso, login PugotiLab, admin/user).
+Prioridade: o que dá valor já com o app atual (filmes, progresso, login Pugotilab, admin/user).
 
 1. **Painel, visão geral** ✅ (esta rodada, PQA-230/231): servidor, contagens, assistindo agora, atividade, biblioteca com "Escanear", tarefas e armazenamento. Só para administrador.
 2. **Configurações do usuário › Reprodução e Legendas.** Preferências guardadas por usuário no SQLite (idioma de áudio e legenda, modo de legenda, qualidade padrão, lembrar faixas, pular ±s), expostas em `GET/PUT /api/me/preferencias`. O player do braço 1 lê essas preferências quando integrar. Umas 3 h.
 3. **Gerenciador de Metadados (filmes).** Edição persistente (título, ano, sinopse, gêneros, nota, travar dados) sobre o Radarr, mais "Identificar" (TMDb por título/ano) e cache local de pôster/fundo. Umas 1 a 2 sessões.
-4. **Painel › Usuários e acesso.** Lista de quem usa (PugotiLab), papel admin/user e bibliotecas permitidas, depois do catálogo com várias bibliotecas. Umas 3 h.
+4. **Painel › Usuários e acesso.** Lista de quem usa (Pugotilab), papel admin/user e bibliotecas permitidas, depois do catálogo com várias bibliotecas. Umas 3 h.
 5. **Painel › Atividade completa e logs.** Eventos (login, varredura, erro de reprodução) num registro próprio e leitura do log do servidor. Umas 2 h.
 6. **Painel › Sessões exatas.** Lista das sessões HLS do `GerenciadorHls` (modo direto/remux/transcode, FFmpeg ativo) e botão para encerrar. Fazer junto com o braço 1.
 
@@ -106,7 +106,7 @@ Só administrador acessa. Usuário comum recebe 403 em todas as rotas `/api/pain
 | Painel | visão geral real (servidor, contagens, assistindo agora, atividade, biblioteca, tarefas, discos) | — |
 | Geral | Nome do servidor (título da página e Painel) | idioma, locais de cache e metadados, Quick Connect, limites de rendimento |
 | ~~Marca~~ | removida em 04/11/2026 (serviço próprio) | — |
-| Usuários | lista de quem já entrou (PugotiLab); **Desativar este usuário** bloqueia o acesso (403); excluir da lista | ocultar, limite de bitrate, sessões simultâneas, acesso às salas (SyncPlay) |
+| Usuários | lista de quem já entrou (Pugotilab); **Desativar este usuário** bloqueia o acesso (403); excluir da lista | ocultar, limite de bitrate, sessões simultâneas, acesso às salas (SyncPlay) |
 | Bibliotecas › Bibliotecas | lista e **Rastrear Todas as Bibliotecas** | adicionar, renomear e remover (precisa do catálogo com várias bibliotecas) |
 | Bibliotecas › Exibir / Metadados / NFO | — | todos os campos |
 | Reprodução › Transcodificação | — (gravado e exposto em `GET /api/configuracao/reproducao`) | todos os campos; o braço do player liga |
@@ -116,7 +116,7 @@ Só administrador acessa. Usuário comum recebe 403 em todas as rotas `/api/pain
 | Atividade | registro real: entrou, começou a reproduzir, configuração alterada, tarefa, chave, backup, usuário; filtro Todos/Usuário/Sistema; retenção de 30 dias | — |
 | TV ao Vivo / DVR | — | campos do DVR; sintonizadores e guia aparecem desativados |
 | Plugins | — | lista de repositórios |
-| Redes | — | todos os campos (portas e HTTPS ficam com o Docker e o proxy do PugotiLab) |
+| Redes | — | todos os campos (portas e HTTPS ficam com o Docker e o proxy do Pugotilab) |
 | Chaves da API | criar (o token aparece uma vez; só o hash é guardado), usar por `X-Pugoticine-Token` (acesso de admin), revogar | — |
 | Backups | criar (`.tar` com cópias consistentes de `pugoticine.db`, `painel.db` e `salas.db` + `manifest.json`), baixar, excluir | restaurar (responde 501 com aviso) |
 | Registros | arquivos `log_AAAAMMDD.log` reais do processo (7 dias) e leitura; aviso de **resposta lenta** aplicado | — |

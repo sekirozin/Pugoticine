@@ -45,7 +45,7 @@ export const PAGINAS: Pagina[] = [
     ]
   },
   // Marca (BrandingOptions do Jellyfin) removida: o Pugoticine é um serviço próprio, sem CSS/aviso personalizáveis.
-  { id: "usuarios", titulo: "Usuários", grupo: "Servidor", especial: true, efeito: { tipo: "parcial", texto: "Lista quem já entrou (contas do PugotiLab: nome, senha e login são do PugotiLab). Têm efeito de verdade: desativar, acesso por biblioteca e classificação etária máxima/bloquear sem classificação. Ocultar, limite de bitrate, sessões simultâneas e acesso às salas: " + NAO_IMPLEMENTADO }, secoes: [] },
+  { id: "usuarios", titulo: "Usuários", grupo: "Servidor", especial: true, efeito: { tipo: "parcial", texto: "Lista quem já entrou (contas do Pugotilab: nome, senha e login são do Pugotilab). Têm efeito de verdade: desativar, acesso por biblioteca e classificação etária máxima/bloquear sem classificação. Ocultar, limite de bitrate, sessões simultâneas e acesso às salas: " + NAO_IMPLEMENTADO }, secoes: [] },
   { id: "bibliotecas", titulo: "Bibliotecas", grupo: "Servidor", pai: "Bibliotecas", especial: true, efeito: { tipo: "parcial", texto: "Adicionar, editar, remover e rastrear bibliotecas funciona de verdade (tipo, pastas, ativar e monitoramento em tempo real); séries e animes recebem o nome do episódio pelas regras do Jellyfin. Idioma/país dos metadados e atualização automática: " + NAO_IMPLEMENTADO + " Música e Livros: o Pugoticine só reproduz vídeo." }, secoes: [] },
   {
     id: "bibliotecas-exibicao", titulo: "Exibir", grupo: "Servidor", pai: "Bibliotecas", efeito: { tipo: "salvo", texto: NAO_IMPLEMENTADO },
@@ -208,7 +208,7 @@ export const PAGINAS: Pagina[] = [
   },
   {
     id: "redes", titulo: "Redes", grupo: "Avançado",
-    efeito: { tipo: "parcial", texto: "Têm efeito de verdade: Redes LAN (vazio = faixas privadas e Tailscale), Proxies conhecidos, Permitir conexões remotas e o filtro de IP remoto (lista branca/negra); o próprio servidor sempre passa e não dá para salvar algo que bloqueie você. Portas, HTTPS, URL base, vínculo de endereço, IPv4/IPv6, descoberta e URIs publicados: " + NAO_IMPLEMENTADO + " (são definidos pelo Docker e pelo proxy do PugotiLab)." },
+    efeito: { tipo: "parcial", texto: "Têm efeito de verdade: Redes LAN (vazio = faixas privadas e Tailscale), Proxies conhecidos, Permitir conexões remotas e o filtro de IP remoto (lista branca/negra); o próprio servidor sempre passa e não dá para salvar algo que bloqueie você. Portas, HTTPS, URL base, vínculo de endereço, IPv4/IPv6, descoberta e URIs publicados: " + NAO_IMPLEMENTADO + " (são definidos pelo Docker e pelo proxy do Pugotilab)." },
     secoes: [
       { titulo: "Configurações da localização do servidor", campos: [
         { chave: "InternalHttpPort", tipo: "numero", rotulo: "Número da porta local de HTTP", padrao: 8096, min: 1, max: 65535 },

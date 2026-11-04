@@ -1,6 +1,6 @@
 // Painel › Redes com efeito, como o NetworkManager + IPBasedAccessValidationMiddleware do Jellyfin 10.11.10:
 // - quem é "local": Redes LAN (LocalNetworkSubnets) ou, se vazio, as faixas privadas (inclui 100.64.0.0/10, a faixa
-//   do Tailscale, para não trancar o acesso do PugotiLab);
+//   do Tailscale, para não trancar o acesso do Pugotilab);
 // - "Permitir conexões remotas" desligado recusa quem não é local;
 // - o filtro de IP remoto (lista branca ou negra) vale só para quem não é local;
 // - X-Forwarded-For só é considerado quando a conexão vem de um Proxy conhecido (KnownProxies);

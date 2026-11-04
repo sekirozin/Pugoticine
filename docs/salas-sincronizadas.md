@@ -1,6 +1,6 @@
 # Salas de filme sincronizadas (Pugoticine)
 
-O pedido: assistir junto com outras pessoas do PugotiLab. A pessoa cria uma sala e convida usuários. A sala pode ser de três tipos:
+O pedido: assistir junto com outras pessoas do Pugotilab. A pessoa cria uma sala e convida usuários. A sala pode ser de três tipos:
 - **pública**, que aparece para todos;
 - **com senha**, que aparece para todos mas pede senha;
 - **privada**, que não aparece para quem não foi convidado.
@@ -34,7 +34,7 @@ A referência foi o SyncPlay do Jellyfin 10.11.10. Bastou ler o código-fonte qu
 **Tipos de sala**
 - **Pública:** aparece na lista e qualquer pessoa entra.
 - **Com senha:** aparece na lista e pede a senha. O servidor guarda só o hash scrypt, com sal, e compara em tempo constante.
-- **Privada:** não aparece na lista e, para quem não tem acesso, responde 404, como se não existisse. Entram o dono, os convidados (por `username` do PugotiLab) e quem tem o código de convite (link `/?sala=<id>&convite=<código>`).
+- **Privada:** não aparece na lista e, para quem não tem acesso, responde 404, como se não existisse. Entram o dono, os convidados (por `username` do Pugotilab) e quem tem o código de convite (link `/?sala=<id>&convite=<código>`).
 
 Quem entra com senha ou com o código passa a ter acesso permanente (`participantes`).
 
@@ -87,5 +87,5 @@ docker compose -p pugoticine-salas -f compose.desenvolvimento.yml -f dev/compose
 ## Pendências
 - **Fila de filmes:** o SyncPlay tem fila (`QueueCore`); a sala tem um filme por vez.
 - **Chat e reações** na sala.
-- **Notificar o convidado** fora do Pugoticine, por exemplo pelo PugotiLab. Hoje o convite aparece na lista de salas da pessoa.
-- **Usuários conhecidos:** o convite aceita qualquer `username` válido. O Pugoticine não tem a lista de usuários do PugotiLab para conferir se ele existe.
+- **Notificar o convidado** fora do Pugoticine, por exemplo pelo Pugotilab. Hoje o convite aparece na lista de salas da pessoa.
+- **Usuários conhecidos:** o convite aceita qualquer `username` válido. O Pugoticine não tem a lista de usuários do Pugotilab para conferir se ele existe.

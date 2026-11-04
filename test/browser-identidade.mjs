@@ -1,6 +1,6 @@
 // PQA-260/261/262/263 (identidade e segurança do Pugoticine), no Chromium contra o Docker local:
 //  PQA-260: aba Marca removida (menu e API) e nenhum CSS personalizado aplicado.
-//  PQA-261: Painel só para administradores do PugotiLab: escondido para os outros, inacessível forçando a tela, API 403.
+//  PQA-261: Painel só para administradores do Pugotilab: escondido para os outros, inacessível forçando a tela, API 403.
 //  PQA-262: todos os ícones da interface são do Tabler (classe icone-tabler / icone-tabler-cheio), nenhum desenhado à mão.
 //  PQA-263: nome "Pugoticine" (sem "PugotiCine") e ícone PU/CI na aba, no topo, no menu do Painel e como ícone de app.
 import assert from "node:assert/strict";
@@ -69,7 +69,8 @@ try {
   assert.equal(await a.locator(".painel-drawer-topo strong").textContent(), "Pugoticine");
   assert.match(await a.locator(".painel-drawer-topo img").getAttribute("src"), /pugoticine-icon\.svg/);
   assert.deepEqual(await iconesForaDoTabler(a), [], "PQA-262: Painel");
-  assert.ok(!(await a.locator("body").innerText()).includes("PugotiCine"), "PQA-263: sem o nome antigo");
+  // Nomes diretos em todos os serviços (Pugoticine, Pugotilab, Pugotilist...): nada com maiúscula no meio.
+  assert.deepEqual((await a.locator("body").innerText()).match(/Pugoti(Cine|Lab|List|Read|Tasks|Money|Dice|Duel)/g) ?? [], [], "PQA-263: sem nomes antigos");
   if (fotos) await a.screenshot({ path: path.join(fotos, "identidade-painel.png") });
   await a.locator("[data-painel-inicio]").click();
   await a.waitForSelector(".titulo");
