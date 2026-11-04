@@ -28,7 +28,7 @@ export function descreverNavegador(ua: string): { nome: string; aplicativo: stri
 
 export class BancoPainel {
   readonly db: Database.Database;
-  constructor(arquivo: string) {
+  constructor(readonly arquivo: string) {
     fs.mkdirSync(path.dirname(arquivo), { recursive: true });
     this.db = new Database(arquivo);
     this.db.pragma("journal_mode = WAL");
@@ -130,8 +130,10 @@ export class BancoPainel {
   // ---------- atividade ----------
   registrar(tipo: string, nome: string, usuario: string | null = null, detalhe = "", nivel: Evento["nivel"] = "Information"): void {
     this.db.prepare("INSERT INTO atividade (data, tipo, nivel, usuario, nome, detalhe) VALUES (?, ?, ?, ?, ?, ?)").run(new Date().toISOString(), tipo, nivel, usuario, nome, detalhe);
-    // Retenção de 30 dias, como o ActivityLogRetentionDays padrão do Jellyfin.
-    this.db.prepare("DELETE FROM atividade WHERE data < ?").run(new Date(Date.now() - 30 * 86_400_000).toISOString());
+  }
+  /** Tarefa "Limpar Registro de Atividades": apaga o que passou da retenção (ActivityLogRetentionDays, 30 dias). */
+  limparAtividade(dias = 30): number {
+    return this.db.prepare("DELETE FROM atividade WHERE data < ?").run(new Date(Date.now() - dias * 86_400_000).toISOString()).changes;
   }
   atividade(filtro: { usuario?: "sim" | "nao"; limite?: number } = {}): Evento[] {
     const onde = filtro.usuario === "sim" ? "WHERE usuario IS NOT NULL" : filtro.usuario === "nao" ? "WHERE usuario IS NULL" : "";

@@ -261,7 +261,7 @@ export const PAGINAS: Pagina[] = [
       { chave: "SlowResponseThresholdMs", tipo: "numero", rotulo: "Tempo em milissegundos para que uma resposta seja considerada lenta", padrao: 500, min: 50, max: 600000 }
     ] }]
   },
-  { id: "tarefas", titulo: "Tarefas Agendadas", grupo: "Avançado", especial: true, efeito: { tipo: "real", texto: "Tarefas reais do PugotiCine; executar agora roda a tarefa de verdade." }, secoes: [] }
+  { id: "tarefas", titulo: "Tarefas Agendadas", grupo: "Avançado", especial: true, efeito: { tipo: "real", texto: "Tarefas do Jellyfin que existem no PugotiCine (varredura, metadados, limpeza de atividade, logs e temporários, otimizar banco). Iniciar e os gatilhos (diário, semanal, intervalo, na inicialização) funcionam de verdade. Tarefas de imagens de capítulos, trickplay, legendas e plugins: ainda não implementadas no PugotiCine." }, secoes: [] }
 ];
 
 export class ErroValidacao extends Error {

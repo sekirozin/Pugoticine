@@ -133,6 +133,7 @@ export async function abrirPainel(container, ferramentas) {
 
 function irPara(id) {
   estado.atual = id;
+  estado.tarefaAberta = null;
   try { sessionStorage.setItem("painel:pagina", id); } catch { /* ignora */ }
   abrirPainel(estado.container, estado.f);
 }
@@ -478,15 +479,52 @@ async function listaRegistros(alvo) {
 
 async function telaTarefas(alvo, cabecalho) {
   const e = estado.f.escapeHtml;
+  if (estado.tarefaAberta) return telaTarefa(alvo, cabecalho, estado.tarefaAberta);
   const { tarefas } = await estado.f.api("/api/painel/tarefas");
   const resultado = { Completed: "Concluída", Failed: "Falhou" };
-  alvo.innerHTML = cabecalho() + ["Biblioteca", "Metadados"].map((categoria) => `<section class="painel-cartao"><h3>${categoria}</h3>${tarefas.filter((t) => t.categoria === categoria).map((t) => `
-    <div class="painel-tarefa-linha" data-tarefa="${t.id}"><div><strong>${e(t.nome)}</strong><small class="painel-ajuda">${e(t.descricao)}</small>
-      <small class="painel-ajuda">${t.executando ? "Executando..." : `Última execução ${e(relativo(t.ultimaExecucao))}${t.duracaoMs !== null ? `, levou ${(t.duracaoMs / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} s` : ""}${t.resultado ? ` · ${resultado[t.resultado]}` : ""} · a cada ${t.intervaloMinutos} min · próxima ${e(data(t.proximaExecucao))}`}</small>${t.erro ? `<small class="painel-erro">${e(t.erro)}</small>` : ""}</div>
-      <button type="button" class="painel-botao pequeno" data-executar="${t.id}" title="Executar agora" ${t.executando ? "disabled" : ""}>▶ Executar</button></div>`).join("")}</section>`).join("");
+  const duracao = (ms) => ms === null ? "" : ms < 1000 ? `${ms} ms` : `${(ms / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} s`;
+  const categorias = [...new Set(tarefas.map((t) => t.categoria))];
+  alvo.innerHTML = cabecalho() + categorias.map((categoria) => `<section class="painel-cartao"><h3>${e(categoria)}</h3>${tarefas.filter((t) => t.categoria === categoria).map((t) => `
+    <div class="painel-tarefa-linha" data-tarefa="${t.id}"><div><button type="button" class="painel-link" data-abrir-tarefa="${t.id}"><strong>${e(t.nome)}</strong></button><small class="painel-ajuda">${e(t.descricao)}</small>
+      <small class="painel-ajuda">${t.executando ? "Executando..." : t.ultimaExecucao ? `Última execução ${e(relativo(t.ultimaExecucao))}, demorando ${duracao(t.duracaoMs)}.${t.resultado ? ` ${resultado[t.resultado]}` : ""}${t.mensagem ? ` · ${e(t.mensagem)}` : ""}` : "Ainda não executada."}</small>
+      <small class="painel-ajuda">${t.gatilhosTexto.length ? e(t.gatilhosTexto.join(" · ")) : "Sem gatilhos (só manual)"}${t.proximaExecucao ? ` · próxima ${e(data(t.proximaExecucao))}` : ""}</small></div>
+      <button type="button" class="painel-botao pequeno" data-executar="${t.id}" title="Iniciar" ${t.executando ? "disabled" : ""}>▶ Iniciar</button></div>`).join("")}</section>`).join("");
   alvo.querySelectorAll("[data-executar]").forEach((b) => b.addEventListener("click", async () => {
     b.disabled = true; b.textContent = "Executando...";
     await estado.f.api(`/api/painel/tarefas/${b.dataset.executar}/executar`, { method: "POST", body: "{}" });
     mostrarPagina();
   }));
+  alvo.querySelectorAll("[data-abrir-tarefa]").forEach((b) => b.addEventListener("click", () => { estado.tarefaAberta = b.dataset.abrirTarefa; mostrarPagina(); }));
+}
+
+async function telaTarefa(alvo, cabecalho, id) {
+  const e = estado.f.escapeHtml;
+  const { tarefa, intervalos, dias } = await estado.f.api(`/api/painel/tarefas/${id}`);
+  const gatilhos = [...tarefa.gatilhos];
+  const salvar = async () => {
+    const r = await fetch(`/api/painel/tarefas/${id}/gatilhos`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ gatilhos }) });
+    const corpo = await r.json();
+    if (!r.ok) { estado.f.toast(corpo.error); return; }
+    estado.f.toast("Configurações salvas.");
+    mostrarPagina();
+  };
+  alvo.innerHTML = cabecalho(`<button type="button" class="painel-botao" data-voltar-tarefas>Voltar</button>`) + `<section class="painel-cartao" data-detalhe-tarefa="${e(id)}"><h3>${e(tarefa.nome)}</h3><p class="painel-ajuda">${e(tarefa.descricao)}</p>
+    <h3>Disparadores de Tarefa</h3>${tarefa.gatilhosTexto.length ? tarefa.gatilhosTexto.map((g, i) => `<div class="painel-pasta" data-gatilho="${i}"><span>${e(g)}</span><button type="button" class="painel-botao pequeno perigo" data-remover-gatilho="${i}">Excluir</button></div>`).join("") : '<p class="painel-vazio">Nenhum disparador: a tarefa só roda manualmente.</p>'}
+    <form class="painel-form" data-novo-gatilho><h3>Adicionar Gatilho</h3>
+      <label class="painel-campo"><span>Tipo de gatilho</span><select name="tipo"><option value="diario">Diário</option><option value="semanal">Semanal</option><option value="intervalo">Em um intervalo</option><option value="inicializacao">Na inicialização do aplicativo</option></select></label>
+      <label class="painel-campo" data-so="semanal"><span>Dia da semana</span><select name="dia">${dias.map((d, i) => `<option value="${i}">${e(d)}</option>`).join("")}</select></label>
+      <label class="painel-campo" data-so="diario semanal"><span>Hora</span><input type="time" name="hora" value="03:00"></label>
+      <label class="painel-campo" data-so="intervalo"><span>A cada</span><select name="intervaloMs">${intervalos.map((ms) => `<option value="${ms}">${ms >= 3_600_000 ? `${ms / 3_600_000} hora(s)` : `${ms / 60_000} minutos`}</option>`).join("")}</select></label>
+      <div class="painel-acoes"><button type="submit" class="painel-botao primario">Adicionar</button></div></form></section>`;
+  const form = alvo.querySelector("[data-novo-gatilho]");
+  const mostrarCampos = () => form.querySelectorAll("[data-so]").forEach((c) => { c.hidden = !c.dataset.so.split(" ").includes(form.tipo.value); });
+  form.tipo.addEventListener("change", mostrarCampos); mostrarCampos();
+  form.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const tipo = form.tipo.value;
+    gatilhos.push(tipo === "inicializacao" ? { tipo } : tipo === "intervalo" ? { tipo, intervaloMs: Number(form.intervaloMs.value) } : tipo === "diario" ? { tipo, hora: form.hora.value } : { tipo, dia: Number(form.dia.value), hora: form.hora.value });
+    salvar();
+  });
+  alvo.querySelectorAll("[data-remover-gatilho]").forEach((b) => b.addEventListener("click", () => { gatilhos.splice(Number(b.dataset.removerGatilho), 1); salvar(); }));
+  alvo.querySelector("[data-voltar-tarefas]").addEventListener("click", () => { estado.tarefaAberta = null; mostrarPagina(); });
 }

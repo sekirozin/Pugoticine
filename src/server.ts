@@ -243,10 +243,9 @@ async function staticFile(req: IncomingMessage, res: ServerResponse): Promise<vo
 
 scan();
 metadata.refresh().catch((error) => console.error("Falha ao atualizar metadados:", error));
-// Painel › Tarefas Agendadas: as execuções automáticas ficam registradas como as manuais.
-const scanTimer = setInterval(() => {
-  void painel.executarTarefa("varredura").then(() => painel.executarTarefa("metadados"));
-}, config.scanIntervalMs);
+// Painel › Tarefas Agendadas: os gatilhos de cada tarefa (padrão: varredura e metadados a cada SCAN_INTERVAL_MS)
+// são verificados pelo agendador, como o TaskManager do Jellyfin.
+painel.iniciarAgendador();
 const server = http.createServer(async (req, res) => {
   try {
     if (req.url === "/health") { json(res, 200, { status: "ok", media: catalog.list().length, lastScanAt }); return; }
@@ -266,7 +265,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 function shutdown(): void {
-  clearInterval(scanTimer);
+  painel.pararAgendador();
   transcoder.stop();
   hls.parar();
   salas.parar();

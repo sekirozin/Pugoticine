@@ -34,9 +34,12 @@ export class Registros {
     }
   }
 
-  limpar(): void {
+  /** Tarefa "Limpar pasta de logs": apaga os arquivos com mais de N dias; devolve quantos. */
+  limpar(): number {
     const limite = Date.now() - this.diasGuardados * 86_400_000;
-    for (const a of this.arquivos()) if (Date.parse(a.modificadoEm) < limite) fs.rmSync(path.join(this.pasta, a.nome), { force: true });
+    let n = 0;
+    for (const a of this.arquivos()) if (Date.parse(a.modificadoEm) < limite) { fs.rmSync(path.join(this.pasta, a.nome), { force: true }); n++; }
+    return n;
   }
 
   arquivos(): ArquivoRegistro[] {
