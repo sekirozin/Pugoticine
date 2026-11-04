@@ -27,3 +27,13 @@ Concluídos: checagem TypeScript, 20 testes de código e 5 testes de navegador (
 ## Último handoff
 
 Codex, 2026-11-03: painel de 22 telas integrado, testado com player/salas e publicado localmente na porta 3012; próximo: usuário conferir o menu Painel; funcionalidades apenas persistidas continuam sinalizadas.
+
+## Incremento de temas — 04/11/2026
+
+- Quatro temas solicitados pelo usuário implementados em Perfil → Tema. Tema 1 preserva o atual; 2 usa #101010/#FFFFFF/#C8FF00; 3 usa #651424/#FFFFFF/#FF5825; 4 usa #0E359D/#FFFFFF/#FF606A. Preferência persiste no navegador, sincroniza abas e mantém CSS personalizado de Marca prioritário.
+- Base atualizada para 35a5b2b antes de editar, preservando navegação administrativa e catálogo de bibliotecas do Claude. Marca visível corrigida para Pugoticine no frontend; nomes e textos retornados pela API dependem da migração de backend coordenada pelo agente principal.
+- PQA-270/271 passaram no Chromium com frontend deste worktree e backend local; teste real de arquivos servidos após deploy fica com o agente principal. REA analisou três fontes do drawer Jellyfin; evidências e limites em docs/navegacao-rea.md.
+- Próximo: integrar este commit, registrar PQA-270/271 no catálogo central e publicar container local após os demais agentes. Nenhum acesso ao Zima.
+
+### Último handoff deste incremento
+Codex (agente navegação), 2026-11-04: quatro temas e seletor móvel validados; aguarda integração e deploy local pelo agente principal.

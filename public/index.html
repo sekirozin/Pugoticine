@@ -5,9 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#000000">
   <title>Pugoticine</title>
+  <script src="/temas.js"></script>
   <link rel="icon" href="/pugoticine-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/salas.css">
+  <link rel="stylesheet" href="/temas.css">
 </head>
 <body>
   <header class="topbar">
@@ -46,6 +48,8 @@
     <strong id="profile-name">Pugotilab</strong>
     <small id="profile-username"></small>
     <a id="profile-open" href="https://pugotilab.com/auth/profile">Perfil</a>
+    <label class="tema-preferencia" for="tema-seletor"><span id="tema-rotulo">Tema</span><select id="tema-seletor" aria-labelledby="tema-rotulo" aria-describedby="tema-status"></select></label>
+    <small id="tema-status" role="status" aria-live="polite"></small>
     <button id="profile-logout">Sair</button>
   </div>
 

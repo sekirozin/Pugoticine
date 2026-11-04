@@ -1,3 +1,5 @@
+@layer pugoticine-base, pugoticine-temas;
+@layer pugoticine-base {
 /* Salas de filme sincronizadas (salas.js). */
 body>#salas-painel.salas-painel,.salas-painel{position:fixed;z-index:90;inset:0;background:rgba(0,0,0,.82);display:grid;place-items:start center;padding:calc(var(--topbar) + 20px) 16px 24px;overflow:auto}
 body>#salas-painel.salas-painel[hidden],.salas-painel[hidden]{display:none}
@@ -33,3 +35,5 @@ body>#salas-painel.salas-painel[hidden],.salas-painel[hidden]{display:none}
 .topbar .salas-topo.ativo{color:#a9b6ff;background:#11152c}
 .topbar .salas-topo.ativo::after{content:"";position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 2px #000}
 @media(max-width:700px){.topbar .salas-topo{margin-left:auto}.topbar .salas-topo~.profile-button{margin-left:6px}}
+
+}

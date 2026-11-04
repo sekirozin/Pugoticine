@@ -1,0 +1,53 @@
+@layer pugoticine-temas {
+/* Tema 1 preserva as cores originais. As três novas paletas compartilham tokens de superfície e contraste. */
+:root{--tema-particula:96,165,250;--tema-brilho:224,242,254}
+:root[data-tema="2"]{--bg:#101010;--text:#fff;--primary:#c8ff00;--tema-particula:200,255,0}
+:root[data-tema="3"]{--bg:#651424;--text:#fff;--primary:#ff5825;--tema-particula:255,88,37}
+:root[data-tema="4"]{--bg:#0e359d;--text:#fff;--primary:#ff606a;--tema-particula:255,96,106}
+:root:is([data-tema="2"],[data-tema="3"],[data-tema="4"]){
+  --surface:color-mix(in srgb,var(--bg),black 14%);
+  --surface-2:color-mix(in srgb,var(--bg),white 9%);
+  --border:color-mix(in srgb,var(--bg),white 25%);
+  --muted:color-mix(in srgb,var(--text),var(--bg) 25%);
+  --primary-hover:color-mix(in srgb,var(--primary),white 18%);
+  --tema-sobre-destaque:#101010;
+  --tema-selecao:color-mix(in srgb,var(--primary) 17%,var(--bg));
+  --tema-campo:color-mix(in srgb,var(--bg),black 24%);
+  --tema-borda-destaque:color-mix(in srgb,var(--primary),var(--bg) 40%);
+  --tema-brilho:255,255,255;
+}
+.tema-preferencia{display:grid;gap:7px;padding-top:12px;margin-top:4px;border-top:1px solid var(--border);font-size:14px}
+.tema-preferencia select{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);font:inherit;cursor:pointer}
+.tema-preferencia select:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+#tema-status{font-size:12px;line-height:1.4;color:var(--muted)}
+#tema-status:empty{display:none}
+/* :where mantém a especificidade baixa; a folha vem depois dos estilos originais. */
+html:not([data-tema="1"]):where([data-tema]) :is(.topbar,.sidebar){background:var(--surface);border-color:var(--border)}
+html:not([data-tema="1"]):where([data-tema]) :is(.profile-menu,.toast,.salas-caixa,.detalhes-caixa,.detalhes-fechar,.painel-usuario,.painel-registro,.painel-contagens div,.painel-filtro){background:var(--surface);color:var(--text);border-color:var(--border)}
+html:not([data-tema="1"]):where([data-tema]) :is(.search,.profile-menu a,.profile-menu button,.painel-campo input:not([type=checkbox]),.painel-campo select,.painel-campo textarea,.painel-seletor,.painel-token,.painel-log,.salas-caixa input,.salas-caixa select,.catalogo-filtros select){background:var(--tema-campo);color:var(--text);border-color:var(--border)}
+html:not([data-tema="1"]):where([data-tema]) :is(.nav-item.active,.painel-menu-item.ativo,.painel-filtro.ativo,.painel-avatar,.sala-pessoa,.salas-topo.ativo,.sala-tipo){background:var(--tema-selecao);color:var(--primary)}
+html:not([data-tema="1"]):where([data-tema]) :is(.painel-botao,.sala-botao.secundario,.sala-barra){background:var(--tema-selecao);color:var(--text);border-color:var(--tema-borda-destaque)}
+html:not([data-tema="1"]):where([data-tema]) :is(.painel-botao.primario,.sala-botao:not(.secundario):not(.perigo),.botao-assistir,.titulo-play,.temporada-aba.ativa,.titulo-selo){background:var(--primary);color:var(--tema-sobre-destaque);border-color:var(--primary)}
+html:not([data-tema="1"]):where([data-tema]) :is(.painel-botao.primario,.sala-botao:not(.secundario):not(.perigo),.botao-assistir,.titulo-play):hover{background:var(--primary-hover)}
+html:not([data-tema="1"]):where([data-tema]) :is(.painel-botao.perigo,.sala-botao.perigo){background:#591721;color:#fff;border-color:#f87171}
+html:not([data-tema="1"]):where([data-tema]) :is(.sala-criar,.sala-cartao){background:var(--surface-2)}
+html:not([data-tema="1"]):where([data-tema]) :is(.painel-linha,.painel-tabela td,.painel-sessao,.painel-disco,.painel-tarefa,.painel-tarefa-linha,.temporadas-abas,.temporada-aba,.episodio){border-color:var(--border)}
+html:not([data-tema="1"]):where([data-tema]) :is(.painel-barra,.painel-nivel,.progress-track){background:var(--surface-2)}
+html:not([data-tema="1"]):where([data-tema]) :is(.eyebrow,.painel-cartao code,.painel-biblioteca-icone svg){color:var(--primary)}
+html:not([data-tema="1"]):where([data-tema]) :is(.fileira h2,.destaque-meta,.destaque-sinopse,.detalhes-sinopse,.detalhes-lateral p,.temporada-aba){color:var(--text)}
+html:not([data-tema="1"]):where([data-tema]) :is(.titulo-meta em,.destaque-restante,.detalhes-lateral span,.episodio-info h4 span,.episodio-info p,.episodio.visto .episodio-info h4){color:var(--muted)}
+html:not([data-tema="1"]):where([data-tema]) :is(.titulo-progresso span,.destaque-progresso span){background:var(--primary)}
+html:not([data-tema="1"]):where([data-tema]) :is(.titulo-capa,.episodio-capa,.poster){background:linear-gradient(145deg,var(--tema-selecao),var(--surface) 75%)}
+html:not([data-tema="1"]):where([data-tema]) .hero{background:radial-gradient(circle at 80% 10%,var(--tema-selecao),transparent 50%),var(--surface)}
+html:not([data-tema="1"]):where([data-tema]) :is(.destaque,.detalhes-topo){background:var(--surface)}
+html:not([data-tema="1"]):where([data-tema]) .detalhes-topo-sombra{background:linear-gradient(to top,var(--surface) 2%,transparent 55%)}
+html:not([data-tema="1"]):where([data-tema]) .episodio:hover{background:var(--surface-2)}
+html:not([data-tema="1"]):where([data-tema]) :is(.painel-campo input,.painel-campo select,.painel-campo textarea):focus{outline-color:var(--primary)}
+html:not([data-tema="1"]):where([data-tema]) :is(.botao-assistir,.botao-info,.titulo-capa,.titulo-play,.titulo-info,.episodio-capa):focus-visible{outline-color:var(--primary)}
+/* Vídeo e fundos de legendas continuam pretos; só os controles recebem a cor de destaque. */
+html:not([data-tema="1"]):where([data-tema]) .osd input[type=range]{accent-color:var(--primary)}
+html:not([data-tema="1"]):where([data-tema]) :is(.osd-menu,.osd-info){background:var(--surface);border-color:var(--border);color:var(--text)}
+
+html:not([data-tema="1"]):where([data-tema]) .player-modal{--osd-destaque:var(--primary)}
+.profile-menu{max-height:calc(100dvh - 70px);overflow-y:auto}
+}

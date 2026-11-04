@@ -3,7 +3,7 @@
   const style = document.createElement('style');
   // :where() deixa a regra com peso zero: só vale para quem não define a própria posição. Antes o ID dentro do :not()
   // vencia as classes do app e tirava o position:fixed do player, da barra superior e dos menus.
-  style.textContent = '#pugotilab-ambient{position:fixed;inset:0;z-index:0;width:100%;height:100%;pointer-events:none;opacity:.78}:where(body>*:not(#pugotilab-ambient):not(script):not(style):not(link)){position:relative;z-index:1}@media(prefers-reduced-motion:reduce){#pugotilab-ambient{opacity:.55}}';
+  style.textContent = '@layer pugoticine-base{#pugotilab-ambient{position:fixed;inset:0;z-index:0;width:100%;height:100%;pointer-events:none;opacity:.78}:where(body>*:not(#pugotilab-ambient):not(script):not(style):not(link)){position:relative;z-index:1}@media(prefers-reduced-motion:reduce){#pugotilab-ambient{opacity:.55}}}';
   document.head.append(style);
   const canvas = document.createElement('canvas');
   canvas.id = 'pugotilab-ambient';
@@ -12,7 +12,9 @@
   const context = canvas.getContext('2d', { alpha: true });
   if (!context) return;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const colors = ['96,165,250','59,130,246','37,99,235','125,211,252','147,197,253'];
+  const coresOriginais = ['96,165,250','59,130,246','37,99,235','125,211,252','147,197,253'];
+  const corTema = () => getComputedStyle(document.documentElement).getPropertyValue('--tema-particula').trim() || '96,165,250';
+  let colors = document.documentElement.dataset.tema === '1' ? coresOriginais : [corTema()];
   let particles = [], width = 0, height = 0, frame = 0, comet = null;
   let nextCometAt = performance.now() + 5500 + Math.random() * 6500;
   const make = (randomY = true) => {
@@ -38,8 +40,10 @@
     const magnitude=Math.hypot(comet.vx,comet.vy), ux=comet.vx/magnitude, uy=comet.vy/magnitude;
     const tailX=comet.x-ux*comet.length, tailY=comet.y-uy*comet.length;
     const gradient=context.createLinearGradient(tailX,tailY,comet.x,comet.y);
-    gradient.addColorStop(0,'rgba(59,130,246,0)'); gradient.addColorStop(.55,`rgba(96,165,250,${.1*fade})`); gradient.addColorStop(1,`rgba(224,242,254,${.9*fade})`);
-    context.save(); context.globalCompositeOperation='screen'; context.lineCap='round'; context.strokeStyle=gradient; context.lineWidth=comet.radius*1.7; context.shadowColor=`rgba(125,211,252,${.8*fade})`; context.shadowBlur=18;
+    const cor = document.documentElement.dataset.tema === '1' ? '96,165,250' : corTema();
+    const brilho = getComputedStyle(document.documentElement).getPropertyValue('--tema-brilho').trim() || '224,242,254';
+    gradient.addColorStop(0,`rgba(${cor},0)`); gradient.addColorStop(.55,`rgba(${cor},${.1*fade})`); gradient.addColorStop(1,`rgba(${brilho},${.9*fade})`);
+    context.save(); context.globalCompositeOperation='screen'; context.lineCap='round'; context.strokeStyle=gradient; context.lineWidth=comet.radius*1.7; context.shadowColor=`rgba(${cor},${.8*fade})`; context.shadowBlur=18;
     context.beginPath(); context.moveTo(tailX,tailY); context.lineTo(comet.x,comet.y); context.stroke();
     context.fillStyle=`rgba(239,246,255,${fade})`; context.beginPath(); context.arc(comet.x,comet.y,comet.radius,0,6.283); context.fill(); context.restore();
     if(progress>=1||comet.x < -320||comet.x > width+320||comet.y < -220||comet.y > height+220){comet=null;nextCometAt=now+9000+Math.random()*15000}
@@ -49,6 +53,11 @@
     for(const p of particles){p.x+=p.vx;p.y+=p.vy;p.s+=p.ss;if(p.y< -12||p.x< -16||p.x>width+16)Object.assign(p,make(false));const alpha=p.a*(.72+Math.sin(p.s)*.28);context.beginPath();context.arc(p.x,p.y,p.r,0,6.283);context.fillStyle=`rgba(${p.c},${alpha})`;context.shadowColor=`rgba(${p.c},${alpha*.6})`;context.shadowBlur=p.r>1.2?8:4;context.fill()}
     context.shadowBlur=0; drawComet(now); if(!reduced) frame=requestAnimationFrame(draw);
   }
+  window.addEventListener('pugoticine:tema', () => {
+    colors = document.documentElement.dataset.tema === '1' ? coresOriginais : [corTema()];
+    for (const p of particles) p.c = colors[Math.floor(Math.random() * colors.length)];
+    if (reduced) draw();
+  });
   new ResizeObserver(resize).observe(document.documentElement); resize(); draw();
   if(!reduced) document.addEventListener('visibilitychange',()=>{cancelAnimationFrame(frame);if(!document.hidden)draw()});
 })();

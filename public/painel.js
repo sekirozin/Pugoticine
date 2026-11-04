@@ -46,7 +46,7 @@ export function renderPainel(painel, escapeHtml) {
     <div class="painel-grade">
       ${cartao("Servidor", [linha("Nome", s.nome), linha("Versão", s.versao), linha("Sistema", `${s.sistema} (${s.arquitetura})`),
         linha("Processador", `${s.cpu} · ${s.nucleos} núcleos`), linha("Carga média", s.cargaMedia.join(" · ")),
-        linha("Memória livre", `${bytes(s.memoriaLivre)} de ${bytes(s.memoriaTotal)}`), linha("Memória do PugotiCine", bytes(s.memoriaProcesso)),
+        linha("Memória livre", `${bytes(s.memoriaLivre)} de ${bytes(s.memoriaTotal)}`), linha("Memória do Pugoticine", bytes(s.memoriaProcesso)),
         linha("Ligado desde", data(s.ligadoDesde)), linha("Node.js", s.node), linha("FFmpeg", s.ffmpeg)].join(""), ' data-painel-servidor')}
       ${cartao("Biblioteca", `<div class="painel-contagens">
           <div><strong data-contagem="filmes">${painel.contagens.filmes}</strong><span>Filmes</span></div>
@@ -119,7 +119,7 @@ export async function abrirPainel(container, ferramentas) {
   if (atual?.pai) estado.abertos.add(atual.pai);
   const gaveta = drawer();
   const servidor = estado.servidor ?? (estado.servidor = await ferramentas.api("/api/marca").catch(() => ({})));
-  gaveta.innerHTML = `<a class="painel-drawer-topo" href="/" data-painel-inicio title="Voltar para o início"><img src="/pugoticine-icon.svg" alt=""><span><strong>${ferramentas.escapeHtml(servidor.nomeServidor || "PugotiCine")}</strong><small>${ferramentas.escapeHtml(servidor.versao || "")}</small></span></a><nav class="painel-menu" aria-label="Painel">${menu()}</nav>`;
+  gaveta.innerHTML = `<a class="painel-drawer-topo" href="/" data-painel-inicio title="Voltar para o início"><img src="/pugoticine-icon.svg" alt=""><span><strong>${ferramentas.escapeHtml(servidor.nomeServidor || "Pugoticine")}</strong><small>${ferramentas.escapeHtml(servidor.versao || "")}</small></span></a><nav class="painel-menu" aria-label="Painel">${menu()}</nav>`;
   container.innerHTML = `<div class="painel-app"><div class="painel-conteudo" data-painel-conteudo></div></div>`;
   gaveta.querySelector("[data-painel-inicio]").addEventListener("click", (ev) => { ev.preventDefault(); ferramentas.voltarAoInicio?.(); });
   gaveta.querySelectorAll("[data-painel-ir]").forEach((b) => b.addEventListener("click", () => { ferramentas.fecharMenu?.(); irPara(b.dataset.painelIr); }));
@@ -264,12 +264,12 @@ function editarUsuario(alvo, u, voce) {
     <label class="painel-campo"><span>Nome</span><input value="${e(u.nome)}" disabled></label><small class="painel-ajuda">Nome, senha e imagem são da conta do PugotiLab.</small>
     <label class="painel-campo painel-check"><input type="checkbox" disabled ${u.papel === "admin" ? "checked" : ""}><span>Permitir que este usuário gerencie o servidor</span></label><small class="painel-ajuda">Definido pelo PugotiLab.</small>
     <h3>Acesso aos Recursos</h3>
-    <label class="painel-campo painel-check"><input type="checkbox" name="desativado" ${u.desativado ? "checked" : ""} ${u.usuario === voce ? "disabled" : ""}><span>Desativar este usuário</span></label><small class="painel-ajuda">Tem efeito: o usuário desativado não consegue usar o PugotiCine.</small>
+    <label class="painel-campo painel-check"><input type="checkbox" name="desativado" ${u.desativado ? "checked" : ""} ${u.usuario === voce ? "disabled" : ""}><span>Desativar este usuário</span></label><small class="painel-ajuda">Tem efeito: o usuário desativado não consegue usar o Pugoticine.</small>
     <label class="painel-campo painel-check"><input type="checkbox" name="oculto" ${u.oculto ? "checked" : ""}><span>Ocultar este usuário das telas de login</span></label>
     <label class="painel-campo"><span>Limite do bitrate para streaming da internet (Mbps)</span><input type="number" name="limiteBitrateMbps" min="0" max="1000" step="any" value="${u.limiteBitrateMbps}"></label>
     <label class="painel-campo"><span>Número máximo de sessões de usuários simultâneas</span><input type="number" name="maxSessoes" min="0" max="100" value="${u.maxSessoes}"></label>
     <label class="painel-campo"><span>Acesso às salas (SyncPlay)</span><select name="acessoSalas">${[["criar", "Permitir que o usuário crie e participe em grupos"], ["participar", "Permitir que o usuário participe de grupos"], ["nenhum", "Desativado para esse usuário"]].map(([v, r]) => `<option value="${v}" ${u.acessoSalas === v ? "selected" : ""}>${r}</option>`).join("")}</select></label>
-    <small class="painel-ajuda">Ocultar, bitrate, sessões e salas: ainda não implementados no PugotiCine (são salvos).</small>
+    <small class="painel-ajuda">Ocultar, bitrate, sessões e salas: ainda não implementados no Pugoticine (são salvos).</small>
     <h3>Acesso à Biblioteca</h3>
     <label class="painel-campo painel-check"><input type="checkbox" name="todasBibliotecas" ${u.todasBibliotecas ? "checked" : ""}><span>Ativar o acesso a todas as bibliotecas</span></label>
     <div class="painel-multipla" data-bibliotecas-usuario>${(estado.bibliotecas ?? []).map((b) => `<label class="painel-check"><input type="checkbox" value="${e(b.id)}" ${u.bibliotecas.includes(b.id) ? "checked" : ""}><span>${e(b.nome)}</span></label>`).join("")}</div>
@@ -344,7 +344,7 @@ function editarBiblioteca(alvo, dados, b) {
     <label class="painel-campo"><span>Idioma preferido de download</span><select name="idiomaMetadados">${[["pt", "Português"], ["en", "English"], ["es", "Español"], ["ja", "日本語"]].map(([v, r]) => `<option value="${v}" ${(b?.idiomaMetadados ?? "pt") === v ? "selected" : ""}>${r}</option>`).join("")}</select></label>
     <label class="painel-campo"><span>País/Região</span><select name="paisMetadados">${[["BR", "Brasil"], ["PT", "Portugal"], ["US", "Estados Unidos"], ["JP", "Japão"]].map(([v, r]) => `<option value="${v}" ${(b?.paisMetadados ?? "BR") === v ? "selected" : ""}>${r}</option>`).join("")}</select></label>
     <label class="painel-campo"><span>Atualizar automaticamente os metadados da internet</span><select name="intervaloAtualizacaoDias">${[[0, "Nunca"], [30, "A cada 30 dias"], [60, "A cada 60 dias"], [90, "A cada 90 dias"]].map(([v, r]) => `<option value="${v}" ${(b?.intervaloAtualizacaoDias ?? 0) === v ? "selected" : ""}>${r}</option>`).join("")}</select></label>
-    <small class="painel-ajuda">Idioma, país e atualização automática: ainda não implementados no PugotiCine (são salvos).</small>
+    <small class="painel-ajuda">Idioma, país e atualização automática: ainda não implementados no Pugoticine (são salvos).</small>
     <div class="painel-acoes"><button type="submit" class="painel-botao primario">${b ? "Salvar" : "Adicionar"}</button><button type="button" class="painel-botao" data-cancelar>Cancelar</button><span class="painel-status" data-painel-status></span></div></form>`;
   const form = area.querySelector("form");
   const desenharPastas = () => {
@@ -409,7 +409,7 @@ async function telaAtividade(alvo, cabecalho) {
 
 async function telaTvAoVivo(alvo, cabecalho) {
   alvo.innerHTML = cabecalho() + `<section class="painel-cartao" data-tv-indisponivel><h3>Sintonizadores</h3><p class="painel-vazio">Nenhum sintonizador.</p>
-    <p class="painel-ajuda">Sintonizador M3U/HDHomeRun e guia XMLTV: ainda não implementados no PugotiCine. Para assistir canais ao vivo o player precisa tocar transmissões contínuas, o que ainda não existe; adicionar um sintonizador agora só criaria uma lista que não toca. Por isso os botões estão desativados.</p>
+    <p class="painel-ajuda">Sintonizador M3U/HDHomeRun e guia XMLTV: ainda não implementados no Pugoticine. Para assistir canais ao vivo o player precisa tocar transmissões contínuas, o que ainda não existe; adicionar um sintonizador agora só criaria uma lista que não toca. Por isso os botões estão desativados.</p>
     <button type="button" class="painel-botao" disabled>Adicionar sintonizador</button></section>
     <section class="painel-cartao"><h3>Provedores de Dados do Guia da TV</h3><p class="painel-vazio">Nenhum provedor.</p><button type="button" class="painel-botao" disabled>Adicionar provedor</button> <button type="button" class="painel-botao" disabled>Atualizar Dados do Guia</button></section>`;
 }
@@ -421,8 +421,8 @@ function listaPlugins() {
     ["Nomes de séries e animes", "Temporada e episódio pelas regras de nomes do Jellyfin."]
   ];
   return `<section class="painel-cartao" data-painel-plugins><h3>Meus Plugins</h3><p class="painel-vazio">Nenhum plugin instalado.</p>
-    <h3>Catálogo</h3><p class="painel-ajuda" data-catalogo-indisponivel>Catálogo indisponível: os plugins do Jellyfin são bibliotecas .NET e o PugotiCine roda em Node, então eles não podem ser instalados aqui. Os repositórios abaixo são só salvos.</p>
-    <h3>Integrações embutidas</h3><p class="painel-ajuda">Fazem parte do PugotiCine (não são plugins e não podem ser desinstaladas):</p>
+    <h3>Catálogo</h3><p class="painel-ajuda" data-catalogo-indisponivel>Catálogo indisponível: os plugins do Jellyfin são bibliotecas .NET e o Pugoticine roda em Node, então eles não podem ser instalados aqui. Os repositórios abaixo são só salvos.</p>
+    <h3>Integrações embutidas</h3><p class="painel-ajuda">Fazem parte do Pugoticine (não são plugins e não podem ser desinstaladas):</p>
     ${integracoes.map(([nome, texto]) => `<div class="painel-pasta"><span><strong>${nome}</strong><small class="painel-ajuda">${texto}</small></span></div>`).join("")}</section>`;
 }
 
@@ -441,7 +441,7 @@ async function telaChaves(alvo, cabecalho) {
     const corpo = await r.json();
     if (!r.ok) { estado.f.toast(corpo.error); return; }
     await mostrarPagina();
-    alvo.querySelector("[data-chave-criada]").innerHTML = `<p class="painel-aviso painel-aviso-real">Copie a chave agora; ela não será mostrada de novo. Use no cabeçalho <code>X-PugotiCine-Token</code>.</p><code class="painel-token" data-token>${e(corpo.token)}</code>`;
+    alvo.querySelector("[data-chave-criada]").innerHTML = `<p class="painel-aviso painel-aviso-real">Copie a chave agora; ela não será mostrada de novo. Use no cabeçalho <code>X-Pugoticine-Token</code>.</p><code class="painel-token" data-token>${e(corpo.token)}</code>`;
   });
   alvo.querySelectorAll("[data-revogar]").forEach((b) => b.addEventListener("click", async () => {
     if (!confirm("Tem certeza que deseja revogar esta chave de API? A conexão da aplicação com este servidor será encerrada abruptamente.")) return;
@@ -454,7 +454,7 @@ async function telaBackups(alvo, cabecalho) {
   const e = estado.f.escapeHtml;
   const { backups, restauracaoPendente: pendente } = await estado.f.api("/api/painel/backups");
   const aviso = pendente ? `<section class="painel-cartao painel-aviso-restauracao" data-restauracao-pendente><h3>Restauração agendada</h3>
-    <p>O backup <strong>${e(pendente.backup)}</strong> será aplicado quando o PugotiCine reiniciar. Reinicie o container para concluir (no ZimaOS: reiniciar o app PugotiCine).</p>
+    <p>O backup <strong>${e(pendente.backup)}</strong> será aplicado quando o Pugoticine reiniciar. Reinicie o container para concluir (no ZimaOS: reiniciar o app Pugoticine).</p>
     <p class="painel-ajuda">Antes foi criado o backup de segurança <strong>${e(pendente.seguranca)}</strong>, para voltar atrás se precisar.</p>
     <div class="painel-acoes"><button type="button" class="painel-botao" data-cancelar-restauracao>Cancelar restauração</button></div></section>` : "";
   alvo.innerHTML = cabecalho(`<button type="button" class="painel-botao primario" data-criar-backup>Criar backup</button>`) + aviso + `<section class="painel-cartao">${tabela(["Arquivo", "Tamanho", "Criado em", ""],
@@ -472,7 +472,7 @@ async function telaBackups(alvo, cabecalho) {
     if (digitado === null) return;
     const r = await fetch(`/api/painel/backups/${encodeURIComponent(nome)}/restaurar`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirmar: digitado.trim() }) });
     const corpo = await r.json();
-    estado.f.toast(r.ok ? "Restauração agendada: reinicie o PugotiCine para aplicar." : corpo.error);
+    estado.f.toast(r.ok ? "Restauração agendada: reinicie o Pugoticine para aplicar." : corpo.error);
     mostrarPagina();
   }));
   alvo.querySelector("[data-cancelar-restauracao]")?.addEventListener("click", async () => {
