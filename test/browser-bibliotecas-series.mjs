@@ -39,7 +39,7 @@ try {
   await page.locator("#nav-bibliotecas .nav-item", { hasText: "Animes" }).click();
   await page.waitForFunction(() => document.querySelector(".catalogo h1")?.textContent === "Animes");
   assert.equal(await page.locator('#nav-bibliotecas .nav-item.active').textContent(), "Animes");
-  const nomes = await page.locator(".grade .titulo-meta strong").allTextContents();
+  const nomes = await page.locator(".grade .titulo-legenda-nome").allTextContents();
   assert.deepEqual(nomes, ["Daemons of the Shadow Realm"], `animes: ${nomes}`);
   assert.equal(await page.locator(".grade .titulo-selo").textContent(), "3");
   assert.match(await page.locator(".grade .titulo-meta em").textContent(), /1 temporada · 3 episódios/);
@@ -63,7 +63,7 @@ try {
   // Filmes: só filmes.
   await page.locator("#nav-bibliotecas .nav-item", { hasText: "Filmes" }).click();
   await page.waitForFunction(() => document.querySelector(".catalogo h1")?.textContent === "Filmes");
-  const filmes = await page.locator(".grade .titulo-meta strong").allTextContents();
+  const filmes = await page.locator(".grade .titulo-legenda-nome").allTextContents();
   assert.ok(filmes.length >= 4 && !filmes.some((f) => /Daemons/.test(f)), `filmes: ${filmes}`);
   assert.deepEqual(erros, []);
   console.log("PQA-225 ok");

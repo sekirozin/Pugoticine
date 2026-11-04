@@ -189,3 +189,10 @@ body.modo-painel .painel-app{display:block}body.modo-painel .painel-menu{positio
 @media(max-width:700px){.episodio{grid-template-columns:42% minmax(0,1fr);gap:12px;padding:10px 0}.episodio-info h4{font-size:14.5px}}
 
 }
+
+/* Legenda abaixo do cartão (como no Jellyfin): nome da obra e ano de lançamento. */
+.titulo-legenda{display:grid;gap:2px;padding:8px 4px 0;text-align:center;line-height:1.3}
+.titulo-legenda-nome{font-size:14px;font-weight:650;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.titulo-legenda-ano{min-height:1.3em;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fileira-seta{bottom:72px}
+@media(max-width:700px){.titulo-legenda-nome{font-size:13px}.titulo-legenda-ano{font-size:12px}}

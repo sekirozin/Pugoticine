@@ -103,6 +103,10 @@ function cartao(item, formato = "poster") {
   const sub = item.ehSerie ? (andamento ? `${rotuloEpisodio(alvo)} · ${restante(p)}` : contagemSerie(item))
     : item.serie ? `${rotuloEpisodio(item)} · ${andamento ? restante(p) : nomeEpisodio(item)}`
       : andamento ? restante(p) : [item.year, duracaoTexto(item.metadata?.runtime)].filter(Boolean).join(" · ");
+  // Legenda abaixo da capa, como no Jellyfin: nome da obra e ano de lançamento (episódio: série e "T1E04 · nome").
+  const legendaNome = item.serie ? item.serie.nome : item.title;
+  const legendaLinha = item.ehSerie ? `${item.episodios.length} ${item.episodios.length === 1 ? "episódio" : "episódios"}`
+    : item.serie ? `${rotuloEpisodio(item)} · ${nomeEpisodio(item)}` : String(item.year ?? "");
   return `<article class="titulo titulo-${formato}" role="listitem">
     <button type="button" class="titulo-capa" data-detalhes="${detalhesId}" aria-label="${escapar(nome)}: mais informações">
       ${largo ? imagem(item, "fundo", [780, 1280], "(max-width: 700px) 70vw, 340px", "titulo-img") : imagem(item, "poster", [185, 342, 500], "(max-width: 700px) 40vw, 180px", "titulo-img")}
@@ -113,7 +117,11 @@ function cartao(item, formato = "poster") {
     <div class="titulo-painel">
       <button type="button" class="titulo-play" data-play="${alvo.id}" title="${andamento ? "Continuar" : "Assistir"}">${ICONE_PLAY}<span class="visualmente-oculto">${andamento ? "Continuar" : "Assistir"} ${escapar(item.title)}</span></button>
       <button type="button" class="titulo-info" data-detalhes="${detalhesId}" title="Mais informações" aria-label="Mais informações sobre ${escapar(item.title)}">${ICONE_INFO}</button>
-      <span class="titulo-meta"><strong>${escapar(item.serie ? item.serie.nome : item.title)}</strong><em>${escapar(sub)}</em></span>
+      <span class="titulo-meta"><em>${escapar(sub)}</em></span>
+    </div>
+    <div class="titulo-legenda">
+      <span class="titulo-legenda-nome" title="${escapar(legendaNome)}">${escapar(legendaNome)}</span>
+      <span class="titulo-legenda-ano">${escapar(legendaLinha)}</span>
     </div>
   </article>`;
 }

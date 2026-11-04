@@ -1,4 +1,4 @@
-// PQA-224: catálogo no estilo de streaming no Chromium do sistema, contra o PugotiCine em Docker: destaque com imagem
+// PQA-224 e PQA-226: catálogo no estilo de streaming no Chromium do sistema, contra o PugotiCine em Docker: destaque com imagem
 // e botões; fileiras; cartão abre detalhes; detalhes fecham com Esc; "Assistir" dos detalhes abre o player; Filmes
 // ordena; busca filtra; desempenho (só as imagens visíveis no primeiro carregamento, WebP no tamanho pedido, cache
 // imutável ao recarregar); celular sem rolagem lateral.
@@ -63,7 +63,15 @@ try {
   await page.locator("#nav-bibliotecas .nav-item", { hasText: "Filmes" }).click();
   await page.waitForSelector(".catalogo .grade");
   await page.locator('[data-filtro="ordem"]').selectOption("ano");
-  const anos = await page.locator(".grade .titulo-meta em").allTextContents();
+  // PQA-226: abaixo da capa, nome da obra e ano de lançamento (como no Jellyfin), visíveis sem passar o mouse.
+  const godfather = page.locator(".grade .titulo", { hasText: "The Godfather" }).first();
+  assert.equal(await godfather.locator(".titulo-legenda-nome").textContent(), "The Godfather");
+  assert.equal(await godfather.locator(".titulo-legenda-ano").textContent(), "1972");
+  assert.ok(await godfather.locator(".titulo-legenda-nome").isVisible());
+  const capa = await godfather.locator(".titulo-capa").boundingBox(), legenda = await godfather.locator(".titulo-legenda").boundingBox();
+  assert.ok(legenda.y >= capa.y + capa.height - 1, "legenda fica abaixo da capa");
+  if (fotos) await page.screenshot({ path: path.join(fotos, "legenda-filmes.png") });
+  const anos = await page.locator(".grade .titulo-legenda-ano").allTextContents();
   const lista = anos.map((t) => Number(t.slice(0, 4)) || 0);
   assert.deepEqual(lista, [...lista].sort((a, b) => b - a), `ordenado por ano: ${lista}`);
   await page.locator("#search").fill("godfather");
