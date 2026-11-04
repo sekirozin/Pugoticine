@@ -20,6 +20,8 @@ services:
     volumes:
       - pugoticine-dados:/app/data
       - ${PUGOTICINE_MIDIA:?Defina a pasta de mídia de teste}/Filmes:/media/movies:ro
+      # Pasta de teste inteira (Filmes, Animes) para o Painel › Bibliotecas escolher pastas.
+      - ${PUGOTICINE_MIDIA}:/media/teste:ro
     # GPU para a conversão (VAAPI); sem /dev/dri o PugotiCine detecta e converte por software.
     devices:
       - /dev/dri:/dev/dri
