@@ -15,7 +15,7 @@ const USADOS = [
   "arrow-left", "rewind-backward-10", "rewind-forward-30", "badge-cc", "music", "volume", "volume-off", "settings", "picture-in-picture",
   "maximize", "minimize", "info-circle", "x", "chevron-left", "chevron-right", "users-group", "users", "books", "player-play", "devices",
   "activity", "plug", "world", "key", "database-export", "file-text", "list-check", "player-record",
-  "player-play-cheio", "player-pause-cheio"
+  "circle-check", "player-play-cheio", "player-pause-cheio", "circle-check-cheio"
 ];
 function conteudo(nome) {
   const cheio = nome.endsWith("-cheio");

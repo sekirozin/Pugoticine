@@ -208,3 +208,13 @@ body.modo-painel .painel-app{display:block}body.modo-painel .painel-menu{positio
 svg.icone-tabler{fill:none!important;stroke:currentColor!important;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 svg.icone-tabler-cheio{fill:currentColor!important;stroke:none!important}
 .titulo-play svg.icone-tabler-cheio,.botao-assistir svg.icone-tabler-cheio{transform:translateX(1px)}
+/* Assistido (PQA-282): selo no cartão, botão na janela de detalhes, na temporada e em cada episódio. */
+.titulo-visto{position:absolute;top:8px;right:8px;z-index:2;width:28px;height:28px;display:grid;place-items:center;border-radius:50%;background:rgba(0,0,0,.6);color:#C8FF00;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+.titulo-visto .icone-tabler-cheio{width:24px;height:24px}
+.botao-marcar{display:inline-flex;align-items:center;gap:8px;height:46px;padding:0 18px 0 14px;border:1px solid rgba(255,255,255,.35);border-radius:6px;background:var(--surface-2,rgba(42,42,42,.6));color:var(--text,#fff);font-size:15px;font-weight:700;cursor:pointer}
+.botao-marcar:hover{background:rgba(80,80,80,.7)}.botao-marcar.marcado{color:var(--tema-texto-destaque,#C8FF00);border-color:currentColor}
+.botao-marcar svg{width:22px;height:22px}.botao-marcar:focus-visible,.episodio-marcar:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.temporada-acoes{display:flex;justify-content:flex-end;margin:8px 0 4px}.temporada-acoes .botao-marcar{height:38px;font-size:14px}
+.episodio-marcar{vertical-align:middle;margin-left:8px;width:30px;height:30px;padding:0;display:inline-grid;place-items:center;border:0;border-radius:50%;background:transparent;color:var(--muted,#8a8a8a);cursor:pointer}
+.episodio-marcar:hover{color:var(--text,#fff)}.episodio-marcar.marcado{color:var(--tema-texto-destaque,#C8FF00)}.episodio-marcar svg{width:22px;height:22px}
+@media(max-width:700px){.botao-marcar{height:42px;font-size:14px}}

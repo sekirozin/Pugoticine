@@ -44,4 +44,22 @@ export class Store {
     `).run(userId, mediaId, safePosition, safeDuration, completed ? 1 : 0, updatedAt);
     return { mediaId, position: safePosition, duration: safeDuration, completed, updatedAt };
   }
+  /**
+   * Marca ou desmarca mídias como assistidas (como "Marcar como assistido" do Jellyfin: assistido zera a posição de
+   * retomada; desmarcar também). A duração conhecida é preservada. Tudo numa transação só.
+   */
+  marcarAssistido(userId: string, mediaIds: string[], assistido: boolean): WatchProgress[] {
+    const updatedAt = new Date().toISOString();
+    const gravar = this.db.prepare(`
+      INSERT INTO watch_progress (userId, mediaId, position, duration, completed, updatedAt)
+      VALUES (?, ?, 0, 0, ?, ?)
+      ON CONFLICT(userId, mediaId) DO UPDATE SET position = 0, completed = excluded.completed, updatedAt = excluded.updatedAt
+    `);
+    const ler = this.db.prepare("SELECT mediaId, position, duration, completed, updatedAt FROM watch_progress WHERE userId = ? AND mediaId = ?");
+    return this.db.transaction(() => [...new Set(mediaIds)].map((mediaId) => {
+      gravar.run(userId, mediaId, assistido ? 1 : 0, updatedAt);
+      const row = ler.get(userId, mediaId) as Omit<WatchProgress, "completed"> & { completed: number };
+      return { ...row, completed: Boolean(row.completed) };
+    }))();
+  }
 }
