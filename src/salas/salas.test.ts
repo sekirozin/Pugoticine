@@ -92,3 +92,45 @@ test("PQA-250: reprodução como o SyncPlay — início agendado, espera por que
   g.comando(s2.id, marcos, { tipo: "carregando" }); // avisar carregamento continua permitido
   g.fechar();
 });
+
+test("PQA-290: sala invisível não aparece na lista de quem não tem relação, mas entra pelo link; fechar some do sistema", () => {
+  const ivis: Usuario = { username: "ivis", nome: "ivis", role: "user" };
+  const arquivo = path.join(pasta, "invisivel.db");
+  const g = new GerenciadorSalas(arquivo, agora);
+  const sala = g.criar(sekiro, { nome: "Escondida", tipo: "publica", invisivel: true, convidados: ["marcos"] });
+  const comum = g.criar(sekiro, { nome: "Comum", tipo: "publica" });
+  assert.equal(g.publico(sala, sekiro).invisivel, true, "o dono vê que é invisível");
+  assert.equal(g.publico(sala, marcos).invisivel, undefined, "os outros não recebem o campo");
+  assert.ok(g.listar(sekiro).some(s => s.id === sala.id), "dono vê");
+  assert.ok(g.listar(marcos).some(s => s.id === sala.id), "convidado vê");
+  assert.ok(!g.listar(mael).some(s => s.id === sala.id), "quem não tem relação não vê");
+  assert.ok(g.listar(mael).some(s => s.id === comum.id));
+  // Pelo link (id) entra, e passa a ver a sala na lista.
+  assert.equal(g.obter(sala.id, mael).id, sala.id);
+  g.entrar(sala.id, mael, {});
+  assert.ok(g.listar(mael).some(s => s.id === sala.id), "quem já participou vê");
+  assert.ok(!g.listar(ivis).some(s => s.id === sala.id));
+  // Persistência: reabre o banco e continua invisível.
+  const g2 = new GerenciadorSalas(arquivo, agora);
+  assert.ok(!g2.listar(ivis).some(s => s.id === sala.id) && g2.existe(sala.id));
+  // Fechar: só o dono (ou admin); some da lista, do id e do banco.
+  assert.throws(() => g2.excluir(sala.id, mael), /Só o dono fecha/);
+  g2.excluir(sala.id, sekiro);
+  assert.equal(g2.existe(sala.id), false);
+  assert.throws(() => g2.obter(sala.id, sekiro), /não encontrada/);
+  assert.equal(new GerenciadorSalas(arquivo, agora).existe(sala.id), false, "fechada também no banco");
+  g.fechar(); g2.fechar();
+});
+
+test("PQA-290: banco de antes da sala invisível ganha a coluna e mantém as salas", () => {
+  const arquivo = path.join(pasta, "antigo.db");
+  const db = new Database(arquivo);
+  db.exec(`CREATE TABLE salas (id TEXT PRIMARY KEY, nome TEXT NOT NULL, tipo TEXT NOT NULL, senhaHash TEXT, dono TEXT NOT NULL,
+    convidados TEXT NOT NULL DEFAULT '[]', participantes TEXT NOT NULL DEFAULT '[]', controle TEXT NOT NULL DEFAULT 'todos',
+    codigoConvite TEXT NOT NULL, mediaId TEXT, criadaEm TEXT NOT NULL)`);
+  db.prepare("INSERT INTO salas VALUES ('11111111-1111-1111-1111-111111111111','Antiga','publica',NULL,'sekiro','[]','[]','todos','abc',NULL,'2026-01-01')").run();
+  db.close();
+  const g = new GerenciadorSalas(arquivo, agora);
+  assert.ok(g.listar(mael).some(s => s.nome === "Antiga"), "sala antiga visível (não invisível)");
+  g.fechar();
+});

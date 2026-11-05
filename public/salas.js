@@ -249,28 +249,105 @@
     try { lista = (await api("/api/salas")).salas; } catch (e) { aviso(e.message); }
     renderizar();
   }
+  // ---------- seletor de pessoas (PQA-290): amigos e busca no Pugotilab + quem já usou o Cine ----------
+  // O estado fica fora do HTML: a sala é redesenhada a cada atualização (pings a cada 5 s) e a busca/seleção não pode
+  // se perder no meio da digitação.
+  const seletor = { busca: "", pessoas: [], escolhidos: new Map(), carregando: false, pedido: 0, tempo: null };
+  async function buscarPessoas(busca) {
+    const pedido = ++seletor.pedido;
+    seletor.carregando = true; desenharSeletor();
+    try {
+      const { pessoas } = await api(`/api/salas/pessoas?q=${encodeURIComponent(busca)}`);
+      if (pedido === seletor.pedido) seletor.pessoas = pessoas;
+    } catch (e) { if (pedido === seletor.pedido) seletor.pessoas = []; aviso(e.message); }
+    if (pedido === seletor.pedido) { seletor.carregando = false; desenharSeletor(); }
+  }
+  function iniciais(nome) { return esc(String(nome || "?").trim().slice(0, 1).toUpperCase()); }
+  function htmlSeletor(jaNaSala = []) {
+    return `<div class="sala-pessoas-seletor" data-seletor-pessoas data-ja="${esc(jaNaSala.join(","))}">
+      <input type="search" placeholder="Buscar pessoas por nome ou @usuário" autocomplete="off" data-pessoas-busca value="${esc(seletor.busca)}" aria-label="Buscar pessoas">
+      <div class="sala-escolhidos" data-pessoas-escolhidos></div>
+      <div class="sala-pessoas-lista" role="group" aria-label="Pessoas" data-pessoas-lista></div>
+    </div>`;
+  }
+  function desenharSeletor() {
+    const caixa = $("[data-seletor-pessoas]");
+    if (!caixa) return;
+    const ja = new Set((caixa.dataset.ja || "").split(",").filter(Boolean));
+    const lista = seletor.pessoas.filter((p) => !ja.has(p.usuario));
+    const avatar = (p) => p.avatarUrl ? `<img src="${esc(p.avatarUrl)}" alt="" loading="lazy">` : `<span>${iniciais(p.nome)}</span>`;
+    $("[data-pessoas-lista]", caixa).innerHTML = seletor.carregando && !lista.length ? '<p class="sala-ajuda">Buscando…</p>'
+      : lista.length ? lista.map((p) => `<label class="sala-pessoa-opcao"><input type="checkbox" value="${esc(p.usuario)}" data-pessoa ${seletor.escolhidos.has(p.usuario) ? "checked" : ""}>
+          <span class="sala-avatar">${avatar(p)}</span><span class="sala-pessoa-nome"><strong>${esc(p.nome)}</strong><small>@${esc(p.usuario)}${p.amigo ? " · amigo" : ""}</small></span></label>`).join("")
+      : `<p class="sala-ajuda">${seletor.busca ? "Ninguém encontrado." : "Nenhum amigo ainda: busque pelo nome ou @usuário."}</p>`;
+    $("[data-pessoas-escolhidos]", caixa).innerHTML = [...seletor.escolhidos.values()].map((p) =>
+      `<button type="button" class="sala-chip" data-tirar="${esc(p.usuario)}" title="Tirar ${esc(p.nome)}">${esc(p.nome)} <span aria-hidden="true">×</span></button>`).join("");
+  }
+  function ligarSeletor() {
+    const caixa = $("[data-seletor-pessoas]");
+    if (!caixa || caixa.dataset.ligado) return;
+    caixa.dataset.ligado = "1";
+    $("[data-pessoas-busca]", caixa).addEventListener("input", (e) => {
+      seletor.busca = e.target.value.trim();
+      clearTimeout(seletor.tempo);
+      seletor.tempo = setTimeout(() => buscarPessoas(seletor.busca), 250);
+    });
+    caixa.addEventListener("change", (e) => {
+      const marcado = e.target.closest?.("[data-pessoa]");
+      if (!marcado) return;
+      const pessoa = seletor.pessoas.find((p) => p.usuario === marcado.value);
+      if (marcado.checked && pessoa) seletor.escolhidos.set(pessoa.usuario, pessoa); else seletor.escolhidos.delete(marcado.value);
+      desenharSeletor();
+    });
+    caixa.addEventListener("click", (e) => {
+      const tirar = e.target.closest?.("[data-tirar]");
+      if (tirar) { seletor.escolhidos.delete(tirar.dataset.tirar); desenharSeletor(); }
+    });
+    desenharSeletor();
+    if (!seletor.pessoas.length && !seletor.carregando) buscarPessoas(seletor.busca);
+  }
+  function limparSeletor() { seletor.busca = ""; seletor.escolhidos.clear(); }
+
   function renderizar() {
     const painel = $("#salas-painel");
     if (!painel || painel.hidden) return;
     const corpo = $("#salas-corpo");
     if (sala.atual) {
       const s = sala.atual;
-      const link = s.codigoConvite ? `${location.origin}/salas/${encodeURIComponent(s.id)}?convite=${encodeURIComponent(s.codigoConvite)}` : "";
+      const link = s.codigoConvite ? `${location.origin}/salas/${encodeURIComponent(s.id)}?convite=${encodeURIComponent(s.codigoConvite)}` : `${location.origin}/salas/${encodeURIComponent(s.id)}`;
+      const membros = s.membros.map((m) => `<span class="sala-pessoa">${esc(m.nome)}</span>`).join("") || "<em>Ninguém conectado</em>";
+      const convidados = s.convidados?.length ? s.convidados.map((u) => `<span class="sala-chip estatico">@${esc(u)}</span>`).join("") : '<span class="sala-ajuda">ninguém ainda</span>';
+      // Mesma sala já na tela: atualiza só o que muda (quem está, filme, convidados), sem apagar a busca de pessoas.
+      const raiz = $(`[data-sala-atual="${CSS.escape(s.id)}"]`, corpo);
+      if (raiz) {
+        $("[data-sala-membros]", raiz).innerHTML = membros;
+        $("[data-sala-membros-total]", raiz).textContent = String(s.membros.length);
+        const filme = $("[data-sala-filme]", raiz);
+        if (filme && document.activeElement !== filme) filme.value = s.reproducao.mediaId || "";
+        $("[data-sala-assistir]", raiz).disabled = !s.reproducao.mediaId;
+        const conv = $("[data-sala-convidados]", raiz);
+        if (conv) conv.innerHTML = convidados;
+        const caixa = $("[data-seletor-pessoas]", raiz);
+        if (caixa) { caixa.dataset.ja = [s.dono, ...(s.convidados || [])].join(","); desenharSeletor(); }
+        return;
+      }
       corpo.innerHTML = `
         <div class="sala-atual" data-sala-atual="${esc(s.id)}">
-          <div class="sala-cabecalho"><div><span class="sala-tipo sala-tipo-${s.tipo}">${ROTULO[s.tipo]}</span><h3>${esc(s.nome)}</h3>
+          <div class="sala-cabecalho"><div><span class="sala-tipo sala-tipo-${s.tipo}">${ROTULO[s.tipo]}</span>${s.invisivel ? '<span class="sala-tipo sala-tipo-invisivel">Invisível</span>' : ""}<h3>${esc(s.nome)}</h3>
             <p>Dono: @${esc(s.dono)} · ${s.controle === "dono" ? "só o dono controla" : "todos controlam"}</p></div>
             <button class="sala-botao secundario" data-sala-sair>Sair da sala</button></div>
           <label>Filme<select data-sala-filme ${s.controle === "dono" && !s.souDono ? "disabled" : ""}>${opcoesFilmes(s.reproducao.mediaId)}</select></label>
           <button class="sala-botao" data-sala-assistir ${s.reproducao.mediaId ? "" : "disabled"}>Assistir com a sala</button>
-          <h4>Na sala agora (${s.membros.length})</h4>
-          <div class="sala-pessoas">${s.membros.map((m) => `<span class="sala-pessoa">${esc(m.nome)}</span>`).join("") || "<em>Ninguém conectado</em>"}</div>
-          ${s.souDono ? `<h4>Convidar pessoas do Pugotilab</h4>
-            <form class="sala-linha" data-sala-convidar><input name="usuarios" placeholder="usuários, separados por vírgula" required><button class="sala-botao">Convidar</button></form>
-            <p class="sala-ajuda">Convidados: ${s.convidados.length ? s.convidados.map((u) => `@${esc(u)}`).join(", ") : "ninguém ainda"}</p>
-            <p class="sala-ajuda">Link de convite: <input readonly value="${esc(link)}" data-sala-link></p>
-            <button class="sala-botao perigo" data-sala-excluir>Encerrar sala</button>` : ""}
+          <h4>Na sala agora (<span data-sala-membros-total>${s.membros.length}</span>)</h4>
+          <div class="sala-pessoas" data-sala-membros>${membros}</div>
+          ${s.souDono ? `<h4>Convidar pessoas</h4>
+            ${htmlSeletor([s.dono, ...(s.convidados || [])])}
+            <button class="sala-botao" data-sala-convidar-escolhidos>Convidar selecionados</button>
+            <p class="sala-ajuda">Convidados: <span data-sala-convidados>${convidados}</span></p>
+            <p class="sala-ajuda">Link da sala: <input readonly value="${esc(link)}" data-sala-link></p>
+            <button class="sala-botao perigo" data-sala-fechar>Fechar sala</button>` : ""}
         </div>`;
+      if (s.souDono) ligarSeletor();
       return;
     }
     corpo.innerHTML = `
@@ -278,22 +355,33 @@
         <h3>Criar sala</h3>
         <input name="nome" placeholder="Nome da sala" maxlength="80" required>
         <div class="sala-linha">
-          <select name="tipo" data-sala-tipo><option value="publica">Pública (aparece para todos)</option><option value="senha">Com senha</option><option value="privada">Privada (só convidados)</option></select>
+          <select name="tipo" data-sala-tipo><option value="publica">Pública (qualquer pessoa entra)</option><option value="senha">Com senha</option><option value="privada">Privada (só convidados)</option></select>
           <select name="controle"><option value="todos">Todos controlam</option><option value="dono">Só eu controlo</option></select>
         </div>
         <input name="senha" type="password" placeholder="Senha da sala" minlength="4" hidden data-sala-senha>
-        <input name="convidados" placeholder="Convidar usuários (separados por vírgula)">
-        <select name="mediaId">${opcoesFilmes("")}</select>
+        <label class="sala-opcao"><input type="checkbox" name="invisivel" data-sala-invisivel><span><strong>Sala invisível</strong><small>Não aparece na lista de salas: só entra quem recebeu o link ou foi convidado.</small></span></label>
+        <div class="sala-campo"><span>Convidar pessoas</span>${htmlSeletor()}</div>
+        <label>Filme<select name="mediaId">${opcoesFilmes("")}</select></label>
         <button class="sala-botao">Criar sala</button>
       </form>
       <h3>Salas</h3>
       <div class="sala-lista">${lista.map((s) => `
         <article class="sala-cartao" data-sala-id="${esc(s.id)}">
-          <div><span class="sala-tipo sala-tipo-${s.tipo}">${ROTULO[s.tipo]}</span>${s.convidado ? '<span class="sala-tipo">Convite</span>' : ""}
+          <div><span><span class="sala-tipo sala-tipo-${s.tipo}">${ROTULO[s.tipo]}</span>${s.invisivel ? '<span class="sala-tipo sala-tipo-invisivel">Invisível</span>' : ""}${s.convidado ? '<span class="sala-tipo">Convite</span>' : ""}</span>
             <strong>${esc(s.nome)}</strong><small>@${esc(s.dono)} · ${s.membros.length} na sala · ${esc(tituloDe(s.reproducao.mediaId))}</small></div>
           ${s.tipo === "senha" && !s.tenhoAcesso ? '<input type="password" placeholder="Senha" data-sala-senha-entrada>' : ""}
           <button class="sala-botao" data-sala-entrar>Entrar</button>
+          ${s.souDono ? '<button class="sala-botao perigo" data-sala-fechar-lista title="Fechar sala: ela some do sistema para todos">Fechar</button>' : ""}
         </article>`).join("") || '<p class="sala-ajuda">Nenhuma sala ainda. Crie a primeira!</p>'}</div>`;
+    ligarSeletor();
+  }
+
+  // Fechar sala (PQA-290): some do sistema para todos (quem está dentro recebe o aviso e sai).
+  async function fecharSala(id, nome) {
+    if (!confirm(`Fechar a sala "${nome}"? Ela some do sistema e todos que estão nela saem.`)) return false;
+    await api(`/api/salas/${id}`, { method: "DELETE" });
+    aviso("Sala fechada.");
+    return true;
   }
 
   async function entrar(id, credenciais = {}) {
@@ -343,7 +431,7 @@
     else topo?.insertBefore(botao, topo.querySelector("#profile-button"));
     const painel = document.createElement("section");
     painel.id = "salas-painel"; painel.className = "salas-painel"; painel.hidden = true;
-    painel.innerHTML = '<div class="salas-caixa"><div class="sala-cabecalho"><h2>Salas de filme</h2><button class="sala-botao secundario" data-salas-fechar>Fechar</button></div><div id="salas-corpo"></div></div>';
+    painel.innerHTML = '<div class="salas-caixa"><div class="sala-cabecalho"><h2>Salas de filme</h2><button class="sala-botao secundario" data-salas-fechar>Voltar</button></div><div id="salas-corpo"></div></div>';
     document.body.append(painel);
     botao.addEventListener("click", () => irPara(sala.atual ? { tela: "salas", sala: sala.atual.id } : { tela: "salas" }));
     painel.addEventListener("click", async (e) => {
@@ -358,8 +446,23 @@
         }
         if (alvo.closest("[data-sala-sair]")) { sala.sair(); irPara({ tela: "salas" }, true); carregar(); return; }
         if (alvo.closest("[data-sala-assistir]")) { await sala.assistir(); return; }
-        if (alvo.closest("[data-sala-excluir]") && confirm("Encerrar a sala para todos?")) {
-          await api(`/api/salas/${sala.atual.id}`, { method: "DELETE" }); sala.sair(); irPara({ tela: "salas" }, true); carregar(); return;
+        if (alvo.closest("[data-sala-fechar]")) {
+          if (await fecharSala(sala.atual.id, sala.atual.nome)) { sala.sair(); limparSeletor(); irPara({ tela: "salas" }, true); carregar(); }
+          return;
+        }
+        if (alvo.closest("[data-sala-fechar-lista]")) {
+          const cartao = alvo.closest("[data-sala-id]");
+          const nome = $("strong", cartao)?.textContent ?? "";
+          if (await fecharSala(cartao.dataset.salaId, nome)) carregar();
+          return;
+        }
+        if (alvo.closest("[data-sala-convidar-escolhidos]")) {
+          const usuarios = [...seletor.escolhidos.keys()];
+          if (!usuarios.length) { aviso("Escolha quem convidar."); return; }
+          await api(`/api/salas/${sala.atual.id}/convidar`, { method: "POST", body: JSON.stringify({ usuarios }) });
+          seletor.escolhidos.clear(); desenharSeletor();
+          aviso(usuarios.length === 1 ? "Convite enviado." : `${usuarios.length} convites enviados.`);
+          return;
         }
         if (alvo.closest("[data-sala-link]")) { alvo.select(); navigator.clipboard?.writeText(alvo.value).then(() => aviso("Link copiado.")).catch(() => {}); }
       }
@@ -374,14 +477,12 @@
       const dados = Object.fromEntries(new FormData(e.target));
       try {
         if (e.target.matches("[data-sala-criar]")) {
-          const { sala: info } = await api("/api/salas", { method: "POST", body: JSON.stringify({ ...dados, convidados: String(dados.convidados || "").split(",") }) });
+          const { sala: info } = await api("/api/salas", { method: "POST", body: JSON.stringify({ ...dados, invisivel: Boolean(dados.invisivel), convidados: [...seletor.escolhidos.keys()] }) });
+          limparSeletor();
           await sala.conectar(info);
           irPara({ tela: "salas", sala: info.id }, true);
         }
-        if (e.target.matches("[data-sala-convidar]")) {
-          await api(`/api/salas/${sala.atual.id}/convidar`, { method: "POST", body: JSON.stringify({ usuarios: String(dados.usuarios).split(",") }) });
-          aviso("Convite enviado.");
-        }
+
       }
       catch (erro) { aviso(erro.message); }
     });

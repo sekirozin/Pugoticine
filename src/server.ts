@@ -26,7 +26,7 @@ import { CacheKeyframes } from "./reproducao/keyframes.js";
 import { detectarVaapi, type Aceleracao } from "./reproducao/aceleracao.js";
 import type { OpcoesConversao } from "./reproducao/hls.js";
 import { GerenciadorSalas } from "./salas/salas.js";
-import { RotasSalas } from "./salas/rotas.js";
+import { RotasSalas, type Pessoa } from "./salas/rotas.js";
 import type { PlaybackPlan, PlaybackRequest, PugotiProfile, MediaItem } from "./types.js";
 
 fs.mkdirSync(config.dataDir, { recursive: true });
@@ -160,7 +160,37 @@ function opcoesConversao(): Partial<OpcoesConversao> {
 }
 const keyframes = new CacheKeyframes(path.join(config.dataDir, "keyframes.json"));
 const hls = new GerenciadorHls(path.join(config.dataDir, "hls"), keyframes, config.ffmpegPath, opcoesConversao);
-const salas = new RotasSalas(new GerenciadorSalas(path.join(config.dataDir, "salas.db")), (id) => Boolean(catalog.get(id)), json, body);
+// Pessoas para convidar a uma sala (PQA-290): amigos da pessoa no Pugotilab (ou a busca por nome/@usuário) — pedidos
+// ao auth pela rede interna, com a sessão da própria pessoa — mais quem já usou o Pugoticine (Painel › Usuários).
+// Auth fora do ar: só a lista local.
+const baseAuth = config.pugotilabProfileUrl.replace(/\/auth\/api\/profile$/, "");
+async function buscarPessoas(req: IncomingMessage, busca: string, eu: { username: string }): Promise<Pessoa[]> {
+  const sessao = /(?:^|;\s*)pugotilab_session=([^;]+)/.exec(req.headers.cookie ?? "")?.[1];
+  const pessoas = new Map<string, Pessoa>();
+  if (sessao) {
+    try {
+      const url = busca ? `${baseAuth}/auth/api/friends/search?q=${encodeURIComponent(busca)}` : `${baseAuth}/auth/api/friends`;
+      const r = await fetch(url, { headers: { Cookie: `pugotilab_session=${sessao}` }, signal: AbortSignal.timeout(4000) });
+      if (r.ok) {
+        const dados = await r.json() as { friends?: AmigoAuth[]; users?: AmigoAuth[] };
+        for (const a of dados.friends ?? dados.users ?? []) {
+          const usuario = String(a.username ?? "").toLowerCase();
+          if (usuario) pessoas.set(usuario, { usuario, nome: a.nickname || a.displayName || usuario, avatarUrl: a.avatarUrl ?? "", amigo: busca ? Boolean(a.followed) : true });
+        }
+      }
+    } catch { /* auth indisponível: segue com a lista local */ }
+  }
+  const termo = busca.toLowerCase().replace(/^@/, "");
+  for (const u of bancoPainel.usuarios()) {
+    if (u.desativado || u.oculto || pessoas.has(u.usuario)) continue;
+    if (termo && !`${u.usuario} ${u.nome}`.toLowerCase().includes(termo)) continue;
+    pessoas.set(u.usuario, { usuario: u.usuario, nome: u.nome, avatarUrl: "", amigo: false });
+  }
+  pessoas.delete(eu.username);
+  return [...pessoas.values()].sort((a, b) => Number(b.amigo) - Number(a.amigo) || a.nome.localeCompare(b.nome, "pt-BR")).slice(0, 40);
+}
+type AmigoAuth = { username?: string; displayName?: string; nickname?: string; avatarUrl?: string; followed?: boolean };
+const salas = new RotasSalas(new GerenciadorSalas(path.join(config.dataDir, "salas.db")), (id) => Boolean(catalog.get(id)), json, body, buscarPessoas);
 let lastScanAt = "";
 const versaoApp = JSON.parse(fs.readFileSync(path.join(config.publicDir, "..", "package.json"), "utf8")).version as string;
 const painel = new RotasPainel({
@@ -194,8 +224,14 @@ async function aquecerReproducao(): Promise<void> {
     let indices = 0;
     for (const m of midias) {
       const assinatura = `${m.size}:${m.modifiedAt}`;
-      if (!/\.(mkv|webm|mk3d)$/i.test(m.absolutePath) || keyframes.temEmCache(m.absolutePath, assinatura)) continue;
-      try { await keyframes.obterSoIndice(m.absolutePath, assinatura); indices++; } catch { /* sem Cues: calcula quando abrirem */ }
+      if (keyframes.temEmCache(m.absolutePath, assinatura)) continue;
+      if (/\.(mkv|webm|mk3d)$/i.test(m.absolutePath)) {
+        try { await keyframes.obterSoIndice(m.absolutePath, assinatura); indices++; } catch { /* sem Cues: calcula quando abrirem */ }
+      } else if ((probe.emCache(m)?.audioTracks.length ?? 0) >= 2) {
+        // MP4 com mais de um áudio: trocar a faixa tira da reprodução direta e precisa do índice de keyframes, que
+        // no MP4 lê o arquivo inteiro (minutos num HD). Preparado aqui, a troca não espera por ele (PQA-289).
+        try { await keyframes.obter(m.absolutePath, assinatura); indices++; } catch { /* calcula quando trocarem */ }
+      }
       await new Promise((r) => setImmediate(r));
     }
     if (analisados || indices) console.log(`Reprodução preparada: ${analisados} análise(s) e ${indices} índice(s) de keyframes.`);

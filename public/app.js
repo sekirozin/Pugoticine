@@ -293,19 +293,25 @@ async function saveProgress() {
 
 function startPlayback() {
   if (!state.active) return;
-  const saved = progressFor(state.active.id);
-  // No HLS o hls.js já começou na posição salva (startPosition); aqui só o modo direto.
-  if (!state.usingHls && saved.position > 10 && !saved.completed && player.seekable?.length) {
+  // No HLS o hls.js já começou na posição certa (startPosition); aqui só o modo direto.
+  const alvo = resumePosition();
+  if (!state.usingHls && alvo > 0 && player.seekable?.length) {
     const max = player.seekable.end(player.seekable.length - 1);
-    if (saved.position <= max) player.currentTime = saved.position;
+    if (alvo <= max) player.currentTime = alvo;
   }
-  player.play().catch(() => {});
+  // Troca de áudio/qualidade com o vídeo pausado: continua pausado.
+  if (state.manterPausado) player.pause();
+  else player.play().catch(() => {});
+  state.retomarEm = null;
+  state.manterPausado = false;
   $("#player-status").textContent = "";
 }
 
 // Posição para retomar (a mesma regra de startPlayback): com a playlist VOD o hls.js já começa nela e o servidor
 // gera os segmentos a partir dali, sem converter o começo do filme.
 function resumePosition() {
+  // Troca de áudio/qualidade/legenda: o ponto exato em que o vídeo estava (inclusive nos primeiros 10 s).
+  if (state.retomarEm !== null && state.retomarEm !== undefined) return state.retomarEm;
   const saved = state.active ? progressFor(state.active.id) : null;
   return saved && saved.position > 10 && !saved.completed ? saved.position : -1;
 }
@@ -317,12 +323,15 @@ function attachSource(url, mode) {
     // Primeiro byte de um trecho pode passar de 10 s (padrão do hls.js) enquanto o Zima converte: espera até 30 s
     // em vez de cancelar e pedir de novo.
     const espera = { default: { maxTimeToFirstByteMs: 30000, maxLoadTimeMs: 120000, timeoutRetry: { maxNumRetry: 2, retryDelayMs: 0, maxRetryDelayMs: 0 }, errorRetry: { maxNumRetry: 6, retryDelayMs: 1000, maxRetryDelayMs: 8000 } } };
-    state.hls = new Hls({ startPosition: resumePosition(), manifestLoadingTimeOut: 20000, maxBufferLength: 30, maxMaxBufferLength: 30, fragLoadPolicy: espera });
-    state.hls.loadSource(url);
-    state.hls.attachMedia(player);
-    state.hls.on(Hls.Events.MANIFEST_PARSED, startPlayback);
+    const hls = new Hls({ startPosition: resumePosition(), manifestLoadingTimeOut: 20000, maxBufferLength: 30, maxMaxBufferLength: 30, fragLoadPolicy: espera });
+    state.hls = hls;
+    hls.loadSource(url);
+    hls.attachMedia(player);
+    hls.on(Hls.Events.MANIFEST_PARSED, startPlayback);
     let recuperacoesDeMidia = 0;
-    state.hls.on(Hls.Events.ERROR, (_event, data) => {
+    hls.on(Hls.Events.ERROR, (_event, data) => {
+      // Erro de um player já trocado (sessão antiga): não é da reprodução atual.
+      if (state.hls !== hls) return;
       console.error(`HLS: ${data.type} ${data.details || ""}${data.fatal ? " (fatal)" : ""}${data.error ? ` — ${data.error.message || data.error}` : ""}`);
       // 401/503 (sessão/servidor ocupado) e 5xx passageiros: o hls.js tenta o mesmo trecho de novo; só 4xx de verdade
       // (trecho que não existe, sessão de vídeo expirada) mudam para o modo universal.
@@ -343,11 +352,12 @@ function attachSource(url, mode) {
   }
 }
 
-async function requestPlayback(forceUniversal = false) {
+async function requestPlayback(forceUniversal = false, mensagem = "Analisando codecs e preparando o vídeo...") {
   const media = state.active;
   if (!media) return;
+  const pedido = state.pedidoReproducao = (state.pedidoReproducao ?? 0) + 1;
   clearVideo();
-  $("#player-status").textContent = "Analisando codecs e preparando o vídeo...";
+  $("#player-status").textContent = mensagem;
   const audioValue = $("#player-audio").dataset.ready ? Number($("#player-audio").value) : null;
   const request = {
     capabilities: browserCapabilities(forceUniversal),
@@ -358,6 +368,8 @@ async function requestPlayback(forceUniversal = false) {
     posicao: Math.max(0, resumePosition())
   };
   const result = await api(`/api/media/${media.id}/playback`, { method: "POST", body: JSON.stringify(request) });
+  // Outra troca começou enquanto este pedido ia e voltava (ou o player fechou): só a última vale.
+  if (pedido !== state.pedidoReproducao || state.active !== media) return;
   state.technical = result.technical;
   state.plan = result.plan;
   definirDuracao(result.technical.duration);
@@ -366,7 +378,7 @@ async function requestPlayback(forceUniversal = false) {
   addSelectedTextTrack(media, result.technical);
   const labels = { direct: "Direct Play", remux: "Remux", transcode: "Transcodificação" };
   $("#player-mode").textContent = `${labels[result.plan.mode]} · ${result.plan.reason}`;
-  $("#player-status").textContent = result.plan.mode === "transcode" ? "Iniciando transcodificação otimizada..." : "Preparando reprodução...";
+  if (!state.retomarEm) $("#player-status").textContent = result.plan.mode === "transcode" ? "Iniciando transcodificação otimizada..." : "Preparando reprodução...";
   attachSource(result.url, result.plan.mode);
 }
 
@@ -388,6 +400,8 @@ async function openPlayer(id) {
   state.active = media;
   state.technical = null;
   state.fallbackAttempted = false;
+  state.retomarEm = null;
+  state.manterPausado = false;
   $("#player-audio").removeAttribute("data-ready");
   $("#player-subtitle").removeAttribute("data-ready");
   $("#player-audio").innerHTML = `<option>Analisando...</option>`;
@@ -403,13 +417,37 @@ async function openPlayer(id) {
   requestPlayback().catch((error) => { $("#player-status").textContent = error.message; });
 }
 
-async function reloadPlayback() {
+// Troca de áudio, qualidade ou legenda em imagem (PQA-289). Antes: esperava salvar o progresso e apagar a sessão no
+// servidor, com o player antigo ainda pedindo trechos dela (erro 403 → "modo universal" por engano), e retomava do
+// progresso salvo (que ignora os primeiros 10 s: voltava ao início). Agora: guarda o ponto exato e se estava pausado,
+// destrói o player antigo antes de tudo e pede a nova reprodução já nesse ponto (o servidor encerra a sessão anterior
+// do mesmo título ao criar a nova; o progresso é salvo em paralelo).
+async function reloadPlayback(evento) {
   if (!state.active) return;
-  await saveProgress();
-  if (state.usingHls) await fetch(`/api/media/${state.active.id}/hls`, { method: "DELETE" }).catch(() => {});
+  if (state.retomarEm === null || state.retomarEm === undefined) {
+    state.retomarEm = player.currentTime || Math.max(0, resumePosition());
+    state.manterPausado = player.paused && !player.ended && player.currentTime > 0;
+    congelarQuadro();
+  }
+  saveProgress();
   state.fallbackAttempted = false;
-  await requestPlayback();
+  const motivo = evento?.target?.id === "player-audio" ? "Trocando o áudio..." : evento?.target?.id === "player-quality" ? "Trocando a qualidade..." : "Trocando a legenda...";
+  await requestPlayback(false, motivo);
 }
+
+// Durante a troca, o último quadro fica na tela (pôster do <video>) em vez de tela preta; sai quando volta a tocar.
+function congelarQuadro() {
+  try {
+    if (!player.videoWidth) return;
+    const tela = document.createElement("canvas");
+    const escala = Math.min(1, 1280 / player.videoWidth);
+    tela.width = Math.round(player.videoWidth * escala);
+    tela.height = Math.round(player.videoHeight * escala);
+    tela.getContext("2d").drawImage(player, 0, 0, tela.width, tela.height);
+    player.poster = tela.toDataURL("image/jpeg", 0.75);
+  } catch { /* quadro indisponível: fica a tela preta de antes */ }
+}
+player.addEventListener("playing", () => player.removeAttribute("poster"));
 
 async function closePlayer() {
   if (!state.active) return;
@@ -419,6 +457,8 @@ async function closePlayer() {
   clearInterval(state.saveTimer);
   state.saveTimer = null;
   clearVideo();
+  player.removeAttribute("poster");
+  state.retomarEm = null;
   state.active = null;
   state.technical = null;
   state.usingHls = false;

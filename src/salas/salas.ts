@@ -1,6 +1,8 @@
 // Salas de filme com reprodução sincronizada, inspiradas no SyncPlay do Jellyfin 10.11.10 (ver docs/salas-sincronizadas.md).
 //  - Tipos: pública (listada), com senha (listada, entra com senha; só o hash scrypt é guardado) e privada (não
 //    listada; entra o dono, os convidados e quem tem o código de convite).
+//  - Invisível (PQA-290, vale para qualquer tipo): não aparece na lista de quem não tem relação com a sala (só dono,
+//    convidados e quem já participou a veem); quem tem o link entra pelas regras do tipo.
 //  - Estado de reprodução como o grupo do SyncPlay: parado → pausado/tocando, e "aguardando" enquanto alguém carrega
 //    (Waiting): ninguém avança até todos estarem prontos (ou o tempo de espera esgotar, como o IgnoreGroupWait).
 //  - "Tocar" é agendado no futuro (max(2 × maior ping, 500 ms), como PlayingGroupState.HandleRequest(Unpause)) para
@@ -18,7 +20,7 @@ export interface Reproducao { mediaId: string | null; estado: EstadoReproducao; 
 export interface Membro { username: string; nome: string; conexoes: number; ping: number; carregando: boolean }
 export interface Sala {
   id: string; nome: string; tipo: TipoSala; senhaHash: string | null; dono: string; convidados: string[];
-  participantes: string[]; controle: Controle; codigoConvite: string; criadaEm: string;
+  participantes: string[]; controle: Controle; codigoConvite: string; criadaEm: string; invisivel: boolean;
   reproducao: Reproducao; membros: Map<string, Membro>; esperaAte: number | null;
 }
 export interface Usuario { username: string; nome: string; role: "admin" | "user" }
@@ -58,11 +60,14 @@ export class GerenciadorSalas {
       id TEXT PRIMARY KEY, nome TEXT NOT NULL, tipo TEXT NOT NULL, senhaHash TEXT, dono TEXT NOT NULL,
       convidados TEXT NOT NULL DEFAULT '[]', participantes TEXT NOT NULL DEFAULT '[]', controle TEXT NOT NULL DEFAULT 'todos',
       codigoConvite TEXT NOT NULL, mediaId TEXT, criadaEm TEXT NOT NULL)`);
+    // Bancos de antes da sala invisível ganham a coluna.
+    const colunas = (this.db.prepare("PRAGMA table_info(salas)").all() as { name: string }[]).map(c => c.name);
+    if (!colunas.includes("invisivel")) this.db.exec("ALTER TABLE salas ADD COLUMN invisivel INTEGER NOT NULL DEFAULT 0");
     for (const l of this.db.prepare("SELECT * FROM salas").all() as Array<Record<string, string | null>>) {
       this.salas.set(String(l.id), {
         id: String(l.id), nome: String(l.nome), tipo: l.tipo as TipoSala, senhaHash: l.senhaHash, dono: String(l.dono),
         convidados: JSON.parse(String(l.convidados)), participantes: JSON.parse(String(l.participantes)),
-        controle: l.controle as Controle, codigoConvite: String(l.codigoConvite), criadaEm: String(l.criadaEm),
+        controle: l.controle as Controle, codigoConvite: String(l.codigoConvite), criadaEm: String(l.criadaEm), invisivel: Number(l.invisivel) === 1,
         reproducao: { mediaId: l.mediaId, estado: l.mediaId ? "pausado" : "parado", posicao: 0, quando: this.agora(), versao: 1 },
         membros: new Map(), esperaAte: null
       });
@@ -73,16 +78,17 @@ export class GerenciadorSalas {
   aoMudar(funcao: (sala: Sala) => void): () => void { this.ouvintes.add(funcao); return () => this.ouvintes.delete(funcao); }
   private avisar(sala: Sala): void { for (const f of this.ouvintes) f(sala); }
   private salvar(s: Sala): void {
-    this.db.prepare(`INSERT INTO salas (id, nome, tipo, senhaHash, dono, convidados, participantes, controle, codigoConvite, mediaId, criadaEm)
-      VALUES (@id, @nome, @tipo, @senhaHash, @dono, @convidados, @participantes, @controle, @codigoConvite, @mediaId, @criadaEm)
+    this.db.prepare(`INSERT INTO salas (id, nome, tipo, senhaHash, dono, convidados, participantes, controle, codigoConvite, mediaId, criadaEm, invisivel)
+      VALUES (@id, @nome, @tipo, @senhaHash, @dono, @convidados, @participantes, @controle, @codigoConvite, @mediaId, @criadaEm, @invisivel)
       ON CONFLICT(id) DO UPDATE SET nome=excluded.nome, tipo=excluded.tipo, senhaHash=excluded.senhaHash, convidados=excluded.convidados,
-      participantes=excluded.participantes, controle=excluded.controle, mediaId=excluded.mediaId`).run({
+      participantes=excluded.participantes, controle=excluded.controle, mediaId=excluded.mediaId, invisivel=excluded.invisivel`).run({
+      invisivel: s.invisivel ? 1 : 0,
       id: s.id, nome: s.nome, tipo: s.tipo, senhaHash: s.senhaHash, dono: s.dono, convidados: JSON.stringify(s.convidados),
       participantes: JSON.stringify(s.participantes), controle: s.controle, codigoConvite: s.codigoConvite,
       mediaId: s.reproducao.mediaId, criadaEm: s.criadaEm });
   }
 
-  criar(dono: Usuario, dados: { nome?: unknown; tipo?: unknown; senha?: unknown; convidados?: unknown; controle?: unknown; mediaId?: unknown }): Sala {
+  criar(dono: Usuario, dados: { nome?: unknown; tipo?: unknown; senha?: unknown; convidados?: unknown; controle?: unknown; mediaId?: unknown; invisivel?: unknown }): Sala {
     const nome = String(dados.nome ?? "").trim().slice(0, 80);
     if (!nome) throw new ErroSala(400, "Dê um nome para a sala.");
     const tipo = dados.tipo as TipoSala;
@@ -93,7 +99,7 @@ export class GerenciadorSalas {
       id: crypto.randomUUID(), nome, tipo, senhaHash: tipo === "senha" ? hashSenha(senha) : null, dono: dono.username,
       convidados: normalizarUsuarios(dados.convidados).filter(u => u !== dono.username), participantes: [],
       controle: dados.controle === "dono" ? "dono" : "todos", codigoConvite: crypto.randomBytes(12).toString("base64url"),
-      criadaEm: new Date(this.agora()).toISOString(),
+      criadaEm: new Date(this.agora()).toISOString(), invisivel: dados.invisivel === true,
       reproducao: { mediaId: typeof dados.mediaId === "string" && dados.mediaId ? dados.mediaId : null, estado: "parado", posicao: 0, quando: this.agora(), versao: 1 },
       membros: new Map(), esperaAte: null
     };
@@ -107,13 +113,20 @@ export class GerenciadorSalas {
   temAcesso(s: Sala, u: Usuario): boolean {
     return s.tipo === "publica" || s.dono === u.username || s.convidados.includes(u.username) || s.participantes.includes(u.username);
   }
-  /** Aparece na lista: públicas e com senha para todos; privadas só para dono e convidados. */
+  /** Pode ver a sala pelo id (link): pública e com senha para todos; privada só para dono, convidados e participantes. */
   visivel(s: Sala, u: Usuario): boolean {
     return s.tipo !== "privada" || this.temAcesso(s, u);
   }
-  listar(u: Usuario): Sala[] {
-    return [...this.salas.values()].filter(s => this.visivel(s, u)).sort((a, b) => b.criadaEm.localeCompare(a.criadaEm));
+  /** Aparece na lista: como `visivel`, mas a invisível só para quem tem relação com ela (dono, convidados, participantes). */
+  listada(s: Sala, u: Usuario): boolean {
+    if (s.invisivel) return s.dono === u.username || s.convidados.includes(u.username) || s.participantes.includes(u.username);
+    return this.visivel(s, u);
   }
+  listar(u: Usuario): Sala[] {
+    return [...this.salas.values()].filter(s => this.listada(s, u)).sort((a, b) => b.criadaEm.localeCompare(a.criadaEm));
+  }
+  /** A sala ainda existe (não foi fechada)? */
+  existe(id: string): boolean { return this.salas.has(id); }
   obter(id: string, u: Usuario): Sala {
     const s = this.salas.get(id);
     // Privada sem acesso responde como inexistente (não revela que existe).
@@ -124,7 +137,11 @@ export class GerenciadorSalas {
   entrar(id: string, u: Usuario, credenciais: { senha?: unknown; convite?: unknown }): Sala {
     const s = this.salas.get(id);
     if (!s) throw new ErroSala(404, "Sala não encontrada.");
-    if (this.temAcesso(s, u)) return s;
+    if (this.temAcesso(s, u)) {
+      // Invisível: quem entrou pelo link passa a ver a sala na própria lista (para voltar depois).
+      if (s.invisivel && s.dono !== u.username && !s.participantes.includes(u.username)) { s.participantes.push(u.username); this.salvar(s); }
+      return s;
+    }
     const convite = typeof credenciais.convite === "string" ? credenciais.convite : "";
     const conviteOk = convite.length > 0 && convite.length === s.codigoConvite.length
       && crypto.timingSafeEqual(Buffer.from(convite), Buffer.from(s.codigoConvite));
@@ -145,7 +162,7 @@ export class GerenciadorSalas {
   }
   excluir(id: string, u: Usuario): void {
     const s = this.obter(id, u);
-    if (s.dono !== u.username && u.role !== "admin") throw new ErroSala(403, "Só o dono exclui a sala.");
+    if (s.dono !== u.username && u.role !== "admin") throw new ErroSala(403, "Só o dono fecha a sala.");
     this.salas.delete(id);
     this.db.prepare("DELETE FROM salas WHERE id = ?").run(id);
     s.membros.clear();
@@ -252,6 +269,7 @@ export class GerenciadorSalas {
   publico(s: Sala, u: Usuario) {
     return {
       id: s.id, nome: s.nome, tipo: s.tipo, dono: s.dono, controle: s.controle, souDono: s.dono === u.username,
+      invisivel: s.dono === u.username ? s.invisivel : undefined,
       tenhoAcesso: this.temAcesso(s, u), convidado: s.convidados.includes(u.username),
       convidados: s.dono === u.username ? s.convidados : undefined,
       codigoConvite: s.dono === u.username ? s.codigoConvite : undefined,

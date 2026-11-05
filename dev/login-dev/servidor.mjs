@@ -6,8 +6,13 @@ const USUARIOS = {
   sekiro: { username: "sekiro", displayName: "sekiro", role: "admin" },
   marcos: { username: "marcos", displayName: "marcos", role: "user" },
   mael: { username: "mael", displayName: "mael", role: "user" },
-  ivis: { username: "ivis", displayName: "ivis", role: "user" }
+  ivis: { username: "ivis", displayName: "ivis", role: "user" },
+  // Nunca usou o Pugoticine: só aparece pela busca do Pugotilab (salas, PQA-290).
+  lia: { username: "lia", displayName: "Lia Campos", role: "user" }
 };
+// Amigos (como /auth/api/friends do Pugotilab): quem cada um segue.
+const AMIGOS = { sekiro: ["marcos", "mael"], marcos: ["sekiro"] };
+const publico = (u, seguido) => ({ id: u.username, username: u.username, displayName: u.displayName, nickname: "", avatarUrl: "", followed: seguido });
 const cookie = (req, nome) => (req.headers.cookie ?? "").split(";").map(p => p.trim().split("=")).find(([k]) => k === nome)?.[1];
 const escapar = (t) => String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 http.createServer((req, res) => {
@@ -16,6 +21,16 @@ http.createServer((req, res) => {
     const usuario = USUARIOS[decodeURIComponent(cookie(req, "pugotilab_session") ?? "").replace(/^dev-/, "")];
     res.writeHead(usuario ? 200 : 401, { "Content-Type": "application/json" });
     return res.end(JSON.stringify(usuario ? { profile: usuario } : { error: "Sem sessão." }));
+  }
+  if (url.pathname === "/auth/api/friends" || url.pathname === "/auth/api/friends/search") {
+    const eu = USUARIOS[decodeURIComponent(cookie(req, "pugotilab_session") ?? "").replace(/^dev-/, "")];
+    if (!eu) { res.writeHead(401, { "Content-Type": "application/json" }); return res.end(JSON.stringify({ authenticated: false })); }
+    const amigos = AMIGOS[eu.username] ?? [];
+    res.writeHead(200, { "Content-Type": "application/json" });
+    if (url.pathname === "/auth/api/friends") return res.end(JSON.stringify({ friends: amigos.map((n) => publico(USUARIOS[n], true)) }));
+    const q = (url.searchParams.get("q") ?? "").toLowerCase().replace(/^@/, "");
+    const achados = Object.values(USUARIOS).filter((u) => u.username !== eu.username && q && `${u.username} ${u.displayName}`.toLowerCase().includes(q));
+    return res.end(JSON.stringify({ users: achados.map((u) => publico(u, amigos.includes(u.username))) }));
   }
   if (url.pathname === "/auth/entrar") {
     const usuario = url.searchParams.get("usuario");

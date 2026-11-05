@@ -6,7 +6,8 @@
 //   GET    /api/salas/:id                detalhes (privada sem acesso = 404)
 //   POST   /api/salas/:id/entrar         {senha?} ou {convite?}
 //   POST   /api/salas/:id/convidar       {usuarios: []} (só o dono)
-//   DELETE /api/salas/:id                exclui (dono ou admin)
+//   DELETE /api/salas/:id                fecha: a sala some do sistema para todos (dono ou admin)
+//   GET    /api/salas/pessoas?q=         pessoas para convidar: amigos e busca no Pugotilab + quem já usou o Cine
 //   GET    /api/salas/:id/eventos        SSE: estado da sala a cada mudança
 //   POST   /api/salas/:id/comandos       {tipo: tocar|pausar|pular|filme|carregando|pronto|ping, ...}
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -15,12 +16,14 @@ import { ErroSala, GerenciadorSalas, type Sala, type Usuario } from "./salas.js"
 
 type Responder = (res: ServerResponse, status: number, corpo: unknown) => void;
 type LerCorpo = <T>(req: IncomingMessage) => Promise<T>;
+export interface Pessoa { usuario: string; nome: string; avatarUrl: string; amigo: boolean }
 
 export class RotasSalas {
   private readonly conexoes = new Map<string, Set<{ res: ServerResponse; usuario: Usuario }>>();
   private readonly temporizador: NodeJS.Timeout;
   constructor(private readonly salas: GerenciadorSalas, private readonly existeMidia: (id: string) => boolean,
-    private readonly responder: Responder, private readonly lerCorpo: LerCorpo) {
+    private readonly responder: Responder, private readonly lerCorpo: LerCorpo,
+    private readonly buscarPessoas: (req: IncomingMessage, busca: string, usuario: Usuario) => Promise<Pessoa[]> = async () => []) {
     salas.aoMudar(sala => this.transmitir(sala));
     this.temporizador = setInterval(() => salas.verificarTodas(), 500);
     this.temporizador.unref();
@@ -28,8 +31,8 @@ export class RotasSalas {
 
   private transmitir(sala: Sala): void {
     for (const c of this.conexoes.get(sala.id) ?? []) {
-      // Quem perdeu o acesso (sala excluída) recebe o aviso e é desconectado.
-      const existe = this.salas.listar(c.usuario).some(s => s.id === sala.id);
+      // Sala fechada: quem estava nela recebe o aviso e é desconectado (sala invisível continua para quem já está dentro).
+      const existe = this.salas.existe(sala.id);
       c.res.write(`event: ${existe ? "sala" : "encerrada"}\ndata: ${JSON.stringify(existe ? this.salas.publico(sala, c.usuario) : { id: sala.id })}\n\n`);
       if (!existe) c.res.end();
     }
@@ -43,6 +46,11 @@ export class RotasSalas {
       if (url.pathname === "/api/salas/tempo" && req.method === "GET") { this.responder(res, 200, { agora: Date.now() }); return true; }
       if (url.pathname === "/api/salas" && req.method === "GET") {
         this.responder(res, 200, { salas: this.salas.listar(usuario).map(s => this.salas.publico(s, usuario)) });
+        return true;
+      }
+      if (url.pathname === "/api/salas/pessoas" && req.method === "GET") {
+        const busca = (url.searchParams.get("q") ?? "").trim().slice(0, 40);
+        this.responder(res, 200, { pessoas: await this.buscarPessoas(req, busca, usuario) });
         return true;
       }
       if (url.pathname === "/api/salas" && req.method === "POST") {
