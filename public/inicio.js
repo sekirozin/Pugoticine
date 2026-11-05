@@ -123,7 +123,10 @@ function cartao(item, formato = "poster") {
   const legendaNome = item.serie ? item.serie.nome : item.title;
   const legendaLinha = item.ehSerie ? (item.year ? String(item.year) : `${item.episodios.length} ${item.episodios.length === 1 ? "episódio" : "episódios"}`)
     : item.serie ? `${rotuloEpisodio(item)} · ${nomeEpisodio(item)}` : String(item.year ?? "");
+  // Quadro = capa + painel do mouse: o painel (play, info) fica sobre a parte de baixo da IMAGEM, nunca sobre a legenda
+  // nem fora do cartão (antes ficava preso à base do cartão inteiro, por cima do nome/ano, e o play era cortado).
   return `<article class="titulo titulo-${formato}" role="listitem">
+    <div class="titulo-quadro">
     <button type="button" class="titulo-capa" data-detalhes="${detalhesId}" aria-label="${escapar(nome)}: mais informações">
       ${largo ? imagem(item, item.serie ? "cena" : "fundo", item.serie ? [780, 1280] : [780, 1280], "(max-width: 700px) 70vw, 340px", "titulo-img") : imagem(item, "poster", [185, 342, 500], "(max-width: 700px) 40vw, 180px", "titulo-img")}
       <span class="titulo-nome-reserva">${escapar(item.title)}</span>
@@ -134,6 +137,7 @@ function cartao(item, formato = "poster") {
       <button type="button" class="titulo-play" data-play="${alvo.id}" title="${andamento ? "Continuar" : "Assistir"}">${ICONE_PLAY}<span class="visualmente-oculto">${andamento ? "Continuar" : "Assistir"} ${escapar(item.title)}</span></button>
       <button type="button" class="titulo-info" data-detalhes="${detalhesId}" title="Mais informações" aria-label="Mais informações sobre ${escapar(item.title)}">${ICONE_INFO}</button>
       <span class="titulo-meta"><em>${escapar(sub)}</em></span>
+    </div>
     </div>
     <div class="titulo-legenda">
       <span class="titulo-legenda-nome" title="${escapar(legendaNome)}">${escapar(legendaNome)}</span>

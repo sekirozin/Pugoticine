@@ -82,7 +82,7 @@ body.tem-destaque:not(.rolou) .topbar{background:transparent;border-bottom-color
 .destaque-restante{margin:6px 0 0;color:#cfcfcf;font-size:13px}
 /* Fileiras */
 .fileiras{position:relative;margin-top:-72px;display:grid;grid-template-columns:minmax(0,1fr);gap:clamp(18px,2.4vw,34px)}
-.fileira{min-width:0;content-visibility:auto;contain-intrinsic-size:auto 320px}
+.fileira{min-width:0}
 .fileira h2{margin:0 0 4px;font-size:clamp(17px,1.5vw,22px);font-weight:750;color:#e5e5e5}
 .fileira-trilho{position:relative;margin:0 calc(-1*clamp(24px,4vw,64px))}
 .fileira-lista{display:flex;gap:8px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-padding-inline:clamp(24px,4vw,64px);padding:22px clamp(24px,4vw,64px) 30px;scrollbar-width:none;overscroll-behavior-x:contain}
@@ -218,3 +218,17 @@ svg.icone-tabler-cheio{fill:currentColor!important;stroke:none!important}
 .episodio-marcar{vertical-align:middle;margin-left:8px;width:30px;height:30px;padding:0;display:inline-grid;place-items:center;border:0;border-radius:50%;background:transparent;color:var(--muted,#8a8a8a);cursor:pointer}
 .episodio-marcar:hover{color:var(--text,#fff)}.episodio-marcar.marcado{color:var(--tema-texto-destaque,#C8FF00)}.episodio-marcar svg{width:22px;height:22px}
 @media(max-width:700px){.botao-marcar{height:42px;font-size:14px}}
+
+/* Cartão: painel do mouse preso à capa (PQA-287). O quadro tem a altura da imagem; o painel fica na base dela, com o
+   mesmo atraso do zoom (aparece junto, sem saltar), e a barra de progresso continua visível por cima. */
+.titulo-quadro{position:relative;border-radius:6px}
+.titulo-quadro .titulo-painel{z-index:2;bottom:0;padding:34px 10px 14px;border-radius:0 0 6px 6px;transition:opacity .2s ease .12s}
+.titulo-largo .titulo-quadro .titulo-painel{padding-bottom:16px}
+.titulo-quadro .titulo-progresso{z-index:3}
+.titulo-quadro .titulo-painel .titulo-meta{text-shadow:0 1px 4px #000}
+@media (prefers-reduced-motion:reduce){.titulo-quadro .titulo-painel{transition:none}}
+/* Fileiras fora da tela não são desenhadas (content-visibility) — na faixa de cartões, que já ocupa a largura toda.
+   Na .fileira, a contenção recortava as pontas da faixa (margem negativa): o primeiro e o último cartão, e o play
+   deles, ficavam cortados (PQA-287). */
+.fileira-trilho{content-visibility:auto;contain-intrinsic-size:auto 340px}
+
