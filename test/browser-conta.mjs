@@ -1,9 +1,9 @@
 // PQA-280: menu da conta igual em todos os serviços (<pugoti-conta>, public/pugoti-conta.js), no Pugoticine.
 //  - foto, nome e @usuário vindos do auth (/auth/api/session, aqui respondido pelo Playwright);
 //  - Perfil → Pugoti Profile com volta; atalhos para os serviços (o atual destacado); Sair → logout do auth;
-//  - PQA-286 (substitui o Claro/Escuro): o Tema Pugotilab da conta (aqui Brasa) é aplicado ao abrir, mesmo com a
-//    preferência antiga "claro"; "Aparência" no menu e a engrenagem abrem Configurações com os 7 temas; escolher Selva
-//    aplica na hora e salva em /auth/api/preferences ({ palette }).
+//  - PQA-286 (05/11): modo da conta (aqui Claro: fundo #f5f5f5) e cor de destaque (aqui Brasa) aplicados ao abrir;
+//    "Aparência · Brasa · Claro" no menu; a engrenagem abre Configurações; escolher Escuro e depois Selva aplica na hora
+//    e salva em /auth/api/preferences ({ theme } e { palette }).
 import assert from "node:assert/strict";
 import path from "node:path";
 import pw from "/home/sekironote/IA/Ferramentas/pugotiread-app-deps/node_modules/playwright/index.js";
@@ -29,8 +29,9 @@ try {
   await page.goto(BASE);
   await page.waitForSelector(".titulo");
   await page.waitForFunction(() => document.documentElement.dataset.pugotiPaleta === "brasa");
+  await page.waitForFunction(() => document.documentElement.dataset.pugotiTema === "claro");
   const brasa = await page.evaluate(() => ({ modo: document.documentElement.dataset.pugotiTema, fundo: getComputedStyle(document.body).backgroundColor, texto: getComputedStyle(document.body).color, primaria: getComputedStyle(document.documentElement).getPropertyValue("--primary").trim() }));
-  assert.deepEqual(brasa, { modo: "escuro", fundo: "rgb(255, 66, 42)", texto: "rgb(255, 255, 255)", primaria: "#000000" }, "Tema Brasa (sem modo claro)");
+  assert.deepEqual(brasa, { modo: "claro", fundo: "rgb(245, 245, 245)", texto: "rgb(20, 20, 20)", primaria: "#ff422a" }, "modo Claro com destaque Brasa");
   if (fotos) await page.screenshot({ path: path.join(fotos, "conta-brasa.png") });
 
   await page.locator("pugoti-conta .pc-gatilho").click();
@@ -43,19 +44,24 @@ try {
   assert.deepEqual(apps.map((t) => t.trim()), ["cine", "read", "tasks", "money", "list", "dice", "Portal"].map((t) => t === "Portal" ? "Portal" : t.charAt(0).toUpperCase() + t.slice(1)), apps.join("|"));
   assert.equal(await menu.locator('.pc-app[aria-current="true"] > span:last-child').innerText(), "Cine");
   assert.equal(await menu.locator('[data-tema]').count(), 0, "sem Claro/Escuro");
-  assert.match(await menu.locator("[data-pc-configuracoes].pc-item").innerText(), /Aparência\s*Brasa/);
+  assert.match(await menu.locator("[data-pc-configuracoes].pc-item").innerText(), /Aparência\s*Brasa · Claro/);
   if (fotos) await page.screenshot({ path: path.join(fotos, "conta-menu.png") });
   await page.keyboard.press("Escape");
   assert.equal(await menu.isHidden(), true, "Esc fecha o menu");
 
   await page.locator("pugoti-conta .pc-engrenagem").click();
   const janela = page.locator(".pc-janela");
-  await janela.locator(".pc-tema-cartao").first().waitFor();
-  assert.equal(await janela.locator(".pc-tema-cartao").count(), 7);
-  await janela.locator('[data-pc-tema="selva"]').click();
-  await page.waitForFunction(() => getComputedStyle(document.body).backgroundColor === "rgb(0, 0, 0)" && document.documentElement.dataset.pugotiPaleta === "selva");
+  await janela.locator(".pc-cor").first().waitFor();
+  assert.equal(await janela.locator(".pc-cor").count(), 7);
+  await janela.locator('[data-pc-modo="escuro"]').click();
+  await page.waitForFunction(() => getComputedStyle(document.body).backgroundColor === "rgb(16, 16, 16)");
   for (let i = 0; i < 20 && !salvo; i++) await page.waitForTimeout(100);
-  assert.deepEqual(salvo, { preferences: { palette: "selva" } }, "tema salvo na conta");
+  assert.deepEqual(salvo, { preferences: { theme: "escuro" } }, "modo salvo na conta");
+  salvo = null;
+  await janela.locator('[data-pc-tema="selva"]').click();
+  await page.waitForFunction(() => document.documentElement.dataset.pugotiPaleta === "selva" && getComputedStyle(document.documentElement).getPropertyValue("--primary").trim() === "#39ff88");
+  for (let i = 0; i < 20 && !salvo; i++) await page.waitForTimeout(100);
+  assert.deepEqual(salvo, { preferences: { palette: "selva" } }, "cor salva na conta");
   await page.keyboard.press("Escape");
   assert.equal(await janela.isHidden(), true, "Esc fecha Configurações");
   assert.deepEqual(erros, []);

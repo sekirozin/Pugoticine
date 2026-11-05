@@ -25,7 +25,7 @@ try {
   await p.goto(base);
   await p.waitForSelector("pugoti-conta .pc-engrenagem");
   await p.locator("pugoti-conta .pc-engrenagem").click();
-  const nomes = (await p.locator(".pc-janela .pc-tema-cartao strong").allTextContents()).map((t) => t.trim());
+  const nomes = (await p.locator(".pc-janela .pc-cor > span:last-child").allTextContents()).map((t) => t.trim());
   assert.deepEqual(nomes, ["Lima", "Laranja", "Brasa", "Neon", "Volt", "Selva", "Ouro"]);
   await p.locator('.pc-janela [data-pc-tema="laranja"]').click();
   await p.waitForFunction(() => document.documentElement.dataset.pugotiPaleta === "laranja");
@@ -34,7 +34,7 @@ try {
   await p.reload();
   await p.waitForFunction(() => document.documentElement.dataset.pugotiPaleta === "laranja");
   assert.deepEqual(errors, []);
-  console.log("PQA-283/286 (Pugoticine): 7 temas, Laranja aplicado, salvo e persistente OK");
+  console.log("PQA-283/286 (Pugoticine): 7 cores, Laranja aplicado, salvo e persistente OK");
 } finally {
   await browser.close();
 }
