@@ -45,7 +45,3 @@ html[data-pugoti-tema="claro"] .player-modal{color-scheme:dark}
 html[data-pugoti-tema="claro"] .fileiras{margin-top:18px}
 html[data-pugoti-tema="claro"] .destaque-sombra{background:linear-gradient(to bottom,rgba(0,0,0,.7) 0,rgba(0,0,0,.25) 110px,transparent 220px),linear-gradient(77deg,rgba(0,0,0,.82) 0%,rgba(0,0,0,.45) 38%,transparent 70%),linear-gradient(to top,rgba(0,0,0,.55) 0%,transparent 35%)}
 }
-
-/* Temas PugotiLab: a preferência da conta troca só a camada de destaque. */
-:root[data-pugoti-paleta="laranja"][data-tema="2"]{--primary:#d97706;--primary-hover:#f59e0b;--tema-particula:217,119,6;--tema-selecao:#3b2915;--tema-borda-destaque:#b45309;--tema-texto-destaque:#f59e0b}
-:root[data-pugoti-paleta="laranja"][data-tema="2"][data-pugoti-tema="claro"]{--primary:#d97706;--primary-hover:#b45309;--tema-selecao:#fff0db;--tema-borda-destaque:#d97706;--tema-texto-destaque:#9a4d00}

@@ -1,11 +1,8 @@
-// Paleta única do Pugoticine: Lima. Remove preferências antigas de tema deste navegador.
+// Base do Pugoticine (tokens de temas.css). O Tema Pugotilab escolhido na conta (Lima, Laranja, Brasa, Neon, Volt,
+// Selva, Ouro) é aplicado pelo pugoti-conta.js, carregado logo depois. Remove preferências antigas deste navegador.
 (() => {
-  let paleta = "lima";
-  try { paleta = localStorage.getItem("pugoti-paleta") === "laranja" ? "laranja" : "lima"; } catch {}
-  document.documentElement.dataset.pugotiPaleta = paleta;
   document.documentElement.dataset.tema = "2";
   document.documentElement.dataset.modo = "escuro";
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#101010");
   try {
     localStorage.removeItem("pugoticine:tema");
     localStorage.removeItem("pugoticine:modo");

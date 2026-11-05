@@ -15,6 +15,8 @@
   const coresOriginais = ['96,165,250','59,130,246','37,99,235','125,211,252','147,197,253'];
   const corTema = () => getComputedStyle(document.documentElement).getPropertyValue('--tema-particula').trim() || '96,165,250';
   let colors = document.documentElement.dataset.tema === '1' ? coresOriginais : [corTema()];
+  // Troca de Tema Pugotilab: as partículas mudam de cor na hora.
+  document.addEventListener('pugoti:paleta', () => { colors = [corTema()]; for (const p of particles) p.c = colors[0]; });
   let particles = [], width = 0, height = 0, frame = 0, comet = null;
   let nextCometAt = performance.now() + 5500 + Math.random() * 6500;
   const make = (randomY = true) => {
