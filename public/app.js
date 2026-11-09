@@ -505,6 +505,18 @@ $("#sidebar").addEventListener("click", (event) => {
   if (innerWidth <= 700) toggleMenu(false);
   navegar(rotaDaView(button.dataset.view));
 });
+// O botão central abre as rotas do catálogo em outra guia.
+document.addEventListener("auxclick", (event) => {
+  if (event.button !== 1 || !(event.target instanceof Element) || event.target.closest("a[href]")) return;
+  const target = event.target.closest("[data-detalhes], [data-play], nav [data-view], #brand");
+  if (!target) return;
+  const rota = target.dataset.detalhes ? { tela: "titulo", id: target.dataset.detalhes }
+    : target.dataset.play ? { tela: "assistir", id: target.dataset.play }
+    : target.id === "brand" ? { tela: "inicio" }
+    : rotaDaView(target.dataset.view);
+  event.preventDefault();
+  window.open(enderecoDe(rota), "_blank", "noopener");
+});
 // Busca: /busca?q=… (digitar troca o endereço sem empilhar uma entrada por letra; apagar volta à tela anterior).
 $("#search").addEventListener("input", (event) => {
   const q = event.target.value;
